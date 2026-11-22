@@ -36,15 +36,15 @@
 
 ## 6. 部署
 
-- [ ] 6.1 `.github/workflows/deploy.yml`：push 到 main 與手動觸發、先跑 `npm test`、只上傳 `site/`、最小權限；驗證：在 GitHub 上首次執行成功
+- [x] 6.1 `.github/workflows/deploy.yml`：push 到 main 與手動觸發、先跑 `npm test`、只上傳 `site/`、最小權限；驗證：在 GitHub 上首次執行成功
 - [x] 6.2 更新 `README.md`（單頁操作、報價金鑰申請、隱私說明、重新產生代號清單）；驗證：照 README 步驟能在本機開啟網頁
-- [ ] 6.3 經使用者同意後建立公開 GitHub repo、推送 `main`、Pages 來源設為 GitHub Actions；驗證：Pages 網址可開啟
+- [x] 6.3 經使用者同意後建立公開 GitHub repo、推送 `main`、Pages 來源設為 GitHub Actions；驗證：Pages 網址可開啟
 
 ## 7. 整合驗收
 
 - [ ] 7.1 在 Pages 網址上：載入範例 → 拖曳區間與目標 → 展開新增持股（搜尋代號）→ 更新報價 → 匯出 → 清空 → 匯入；驗證：每步與規格相符，網路面板中只有對 Finnhub 的報價請求且不含股數
-- [ ] 7.2 手機（375px）與桌面、深色與淺色各檢查一次；驗證：無破版、無水平捲軸
-- [ ] 7.3 確認 Pages 只發布 `site/` 內容；驗證：`<網址>/openspec/` 與 `<網址>/design/` 回傳 404
+- [x] 7.2 手機（375px）與桌面、深色與淺色各檢查一次；驗證：無破版、無水平捲軸
+- [x] 7.3 確認 Pages 只發布 `site/` 內容；驗證：`<網址>/openspec/` 與 `<網址>/design/` 回傳 404
 
 ## Workflow follow-up
 
