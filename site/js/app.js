@@ -270,8 +270,9 @@
 
   // ---------- 結論：一句話 ----------
   function tradeSentence(p) {
-    if (!p.trades.length) return (p.side === 'sell' ? '賣約 ' : '買約 ') + usd(p.amount);
-    return (p.side === 'sell' ? '賣 ' : '買 ') + p.trades.map(function (t) { return esc(t.sym) + ' ' + t.shares.toLocaleString('en-US'); }).join(' · ') + ' 股';
+    var cls = p.side === 'sell' ? 'sell' : 'buy', verbTxt = p.side === 'sell' ? '賣' : '買';
+    if (!p.trades.length) return '<span class="vchip ' + cls + '">' + verbTxt + '約 ' + usd(p.amount) + '</span>';
+    return p.trades.map(function (t) { return '<span class="vchip ' + cls + '"><b>' + esc(t.sym) + '</b>' + verbTxt + ' ' + t.shares.toLocaleString('en-US') + '</span>'; }).join('');
   }
   function renderVerdict(R) {
     var v = $('#verdict'), p = R.before;
@@ -290,15 +291,15 @@
       var still = R.after.rows.filter(isOut);
       v.className = 'verdict ' + (still.length ? 'bad' : 'ok');
       v.innerHTML = '<h2><span class="ic">' + (still.length ? ICON.warn : ICON.ok) + '</span>' + (still.length ? '還有 ' + still.length + ' 個要處理' : '調整後都剛好') + '</h2>' +
-        '<p>' + (R.cash > 0 ? '多出現金 ' + usd(R.cash) : R.cash < 0 ? '要補 ' + usd(R.cash) : '') + '</p>';
+        '<p class="todo-line">' + (R.cash > 0 ? '<span class="vchip cash">+' + usd(R.cash) + ' 現金</span>' : R.cash < 0 ? '<span class="vchip buy">要補 ' + usd(R.cash) + '</span>' : '') + '</p>';
       return;
     }
     if (outs.length) {
       v.className = 'verdict bad';
       v.innerHTML = '<h2><span class="ic">' + ICON.warn + '</span>' + outs.map(function (r) { return esc(r.name || '未命名') + (r.status === 'over' ? '太多了' : '太少了'); }).join('、') + '</h2>' +
         '<p class="todo-line">' + outs.map(function (r) {
-          return (outs.length > 1 ? '<button class="link" type="button" data-open="' + esc(r.id) + '">' + esc(r.name || '未命名') + '</button>：' : '') + tradeSentence(R.plans[r.id]);
-        }).join('<br>') + '</p>';
+          return '<span class="vgroup">' + (outs.length > 1 ? '<i class="sw" style="background:' + color(r.i) + '"></i>' : '') + tradeSentence(R.plans[r.id]) + '</span>';
+        }).join('') + '</p>';
     } else {
       v.className = 'verdict ok';
       v.innerHTML = '<h2><span class="ic">' + ICON.ok + '</span>都剛好，不用動</h2>';
@@ -337,7 +338,9 @@
     var el = document.createElement('div');
     el.className = 'row'; el.dataset.id = r.id; el.setAttribute('role', 'listitem');
     el.innerHTML = '<button class="row-main" type="button" aria-expanded="false">' +
-      '<i class="sw"></i><span class="t"></span><span class="nums"></span><span class="act"></span>' + ICON.chev + '</button>' +
+      '<i class="sw"></i><span class="t"></span>' +
+      '<span class="gauge" aria-hidden="true"><i class="g-band"></i><i class="g-tgt"></i><i class="g-ghost"></i><i class="g-dot"></i></span>' +
+      '<b class="pct"></b><span class="act"></span>' + ICON.chev + '</button>' +
       '<div class="detail"><div><div class="detail-in"><div class="planbox"></div><div class="hold"></div></div></div></div>';
     return el;
   }
@@ -350,6 +353,7 @@
     }
     var empty = box.querySelector('.rows-empty');
     if (empty) empty.remove();
+    var gaugeMax = calc.axisMax(p.rows.concat(afterView ? R.after.rows : []));
     p.rows.forEach(function (r, idx) {
       var el = box.querySelector('.row[data-id="' + r.id + '"]');
       var fresh = !el;
@@ -363,7 +367,20 @@
       var out = isOut(d);
       el.querySelector('.sw').style.background = color(r.i);
       el.querySelector('.t').textContent = r.name || '未命名';
-      el.querySelector('.nums').innerHTML = (p.total > 0 ? '<b>' + pctTxt(d.weight, d) + '</b>' : '') + '<span>目標 ' + fmtP(r.target) + '</span>';
+      // 量尺：所有板塊共用同一個比例尺，方便互相比較
+      var gx = function (v) { return (Math.max(0, Math.min(v, gaugeMax)) / gaugeMax) * 100; };
+      var valid = r.status !== 'invalid';
+      el.querySelector('.g-band').style.cssText = valid ? 'left:' + gx(r.lo) + '%;width:' + (gx(r.hi) - gx(r.lo)) + '%' : 'display:none';
+      el.querySelector('.g-tgt').style.left = gx(calc.isNum(r.target) ? r.target : 0) + '%';
+      var gdot = el.querySelector('.g-dot');
+      gdot.style.left = gx(d.weight) + '%';
+      gdot.style.background = out ? 'var(--critical)' : color(r.i);
+      gdot.hidden = !(p.total > 0);
+      var gghost = el.querySelector('.g-ghost');
+      gghost.hidden = !(afterView && plan);
+      gghost.style.left = gx(r.weight) + '%';
+      el.querySelector('.pct').textContent = p.total > 0 ? pctTxt(d.weight, d) : '';
+      el.querySelector('.row-main').title = (r.name || '') + '：現在 ' + pctTxt(d.weight, d) + '，目標 ' + fmtP(r.target) + '（' + fmtP(r.lo) + '–' + fmtP(r.hi) + ' 都算剛好）';
       var act = el.querySelector('.act');
       if (out) { act.className = 'act bad'; act.textContent = d.status === 'over' ? '太多' : '太少'; }
       else if (r.status === 'empty' || r.status === 'invalid') { act.className = 'act muted'; act.textContent = '—'; }
@@ -390,19 +407,42 @@
   // 股票標籤：代號、股數，要買賣的直接標在標籤上
   function renderChips(el, r, plan) {
     el.dataset.hv = 'view';
-    var list = data.holdings.filter(function (h) { return h.sectorId === r.id && h.sym; });
+    var list = data.holdings.filter(function (h) { return h.sectorId === r.id && h.sym && calc.holdingValue(h) > 0; });
     var tmap = {};
     if (plan) plan.trades.forEach(function (t) { tmap[t.holdingId] = t; });
-    var chips = list.map(function (h) {
-      var t = tmap[h.id];
-      var shares = afterView && t && calc.isNum(h.shares) ? h.shares + (t.side === 'sell' ? -t.shares : t.shares) : h.shares;
-      var badge = t ? '<em class="' + t.side + (afterView ? ' done' : '') + '">' + (afterView ? '✓ ' : '') + (t.side === 'sell' ? '賣 ' : '買 ') + t.shares.toLocaleString('en-US') + '</em>' : '';
-      if (quotes.isCash(h.sym)) return '<span class="hchip"><b>現金</b><small>' + (calc.isNum(shares) ? usd(shares) : '—') + '</small>' + badge + '</span>';
-      return '<span class="hchip' + (t ? ' has-t' : '') + '" title="' + esc(symNames && symNames[h.sym] || h.sym) + '"><b>' + esc(h.sym) + '</b><small>' + sharesTxt(shares) + ' 股</small>' + badge + '</span>';
-    }).join('');
+    var buyTotal = 0;
+    list.forEach(function (h) { var t = tmap[h.id]; if (t && t.side === 'buy') buyTotal += t.value; });
+    var den = list.reduce(function (a2, h) { return a2 + calc.holdingValue(h); }, 0) + buyTotal;
     var anyHold = data.holdings.some(function (h) { return h.sectorId === r.id; });
-    el.querySelector('.hold').innerHTML = '<div class="hview">' + (chips || '<span class="tip">還沒有股票</span>') +
-      '<button class="edit-btn" type="button" data-edit-s="' + esc(r.id) + '" aria-label="編輯' + esc(r.name || '') + '">' + (anyHold ? ICON.pen + '編輯' : ICON.plus + '新增') + '</button></div>';
+    var editBtn = '<button class="edit-btn" type="button" data-edit-s="' + esc(r.id) + '" aria-label="編輯' + esc(r.name || '') + '的股票" title="編輯">' + (anyHold ? ICON.pen : ICON.plus + '新增') + '</button>';
+    if (!list.length) {
+      el.querySelector('.hold').innerHTML = '<div class="hview"><span class="tip">還沒有股票</span>' + editBtn + '</div>';
+      return;
+    }
+    var hasCut = false;
+    // 每檔一條橫條：長度代表金額（最大的一檔佔滿），紅色斜線是要賣的部分
+    var maxV = list.reduce(function (m, h) { var t = tmap[h.id]; return Math.max(m, calc.holdingValue(h) + (t && t.side === 'buy' ? t.value : 0)); }, 0) || 1;
+    var rowsHtml = list.map(function (h) {
+      var v = calc.holdingValue(h), t = tmap[h.id];
+      var sell = t && t.side === 'sell', buy = t && t.side === 'buy', cut = t ? t.value : 0;
+      if (t) hasCut = true;
+      var keep = sell ? Math.max(0, v - cut) : v;
+      var cash = quotes.isCash(h.sym);
+      var after = t && calc.isNum(h.shares) ? h.shares + (sell ? -t.shares : t.shares) : h.shares;
+      var shown = afterView && t ? after : h.shares;
+      var tip = (cash ? '現金 ' + usd(h.shares) : h.sym + (symNames && symNames[h.sym] ? '（' + symNames[h.sym] + '）' : '') + ' ' + sharesTxt(h.shares) + ' 股') +
+        (t ? '，' + (sell ? '賣 ' : '買 ') + t.shares + ' 股（約 ' + usd(t.value) + '）→ ' + sharesTxt(after) + ' 股' : '');
+      var kw = (keep / maxV) * 100, cw = (cut / maxV) * 100;
+      var label = cash ? usd(shown) : sharesTxt(shown) + ' 股';
+      var badge = t ? '<em class="' + (afterView ? 'done' : sell ? 'sell' : 'buy') + '">' + (afterView ? '✓' : (sell ? '−' : '+') + t.shares.toLocaleString('en-US')) + '</em>' : '<em></em>';
+      return '<div class="hl" title="' + esc(tip) + '">' +
+        '<span class="hl-sym">' + (cash ? '現金' : esc(h.sym)) + '</span>' +
+        '<span class="hl-track"><span class="hl-keep" style="width:' + kw + '%;background:' + color(r.i) + '"><small>' + label + '</small></span>' +
+        (t ? '<span class="hl-cut ' + (afterView ? 'done' : sell ? 'sell' : 'buy') + '" style="width:' + cw + '%"></span>' : '') + '</span>' +
+        badge + '</div>';
+    }).join('');
+    el.querySelector('.hold').innerHTML = '<div class="hlist">' + rowsHtml + '</div>' +
+      '<div class="hkey">' + (hasCut && !afterView ? '<i class="sw-' + (plan.side === 'sell' ? 'sell' : 'buy') + '"></i>' + (plan.side === 'sell' ? '要賣' : '要買') : '') + '<span class="sp"></span>' + editBtn + '</div>';
   }
 
   // 持股清單：結構改變時才重建；打字時只更新提示文字

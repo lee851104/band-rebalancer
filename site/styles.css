@@ -322,6 +322,65 @@ td.flash, input.flash { animation: flash 1.2s ease-out; }
 .row .row-main .act.ok { font-size: 18px; }
 .row .row-main .nums span { margin-left: 8px; font-size: 13px; }
 
+/* ---------- 每一行的小量尺 ---------- */
+.row .row-main .t { min-width: 64px; flex: none; }
+.gauge { position: relative; flex: 1; height: 22px; min-width: 120px; }
+.gauge::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--grid); border-radius: 1px; }
+.gauge .g-band { position: absolute; top: 3px; bottom: 3px; border-radius: 8px; background: color-mix(in srgb, var(--good) 32%, transparent); border: 1px solid color-mix(in srgb, var(--good) 55%, transparent); transition: left .6s, width .6s; }
+.gauge .g-tgt { position: absolute; top: 1px; bottom: 1px; width: 2px; margin-left: -1px; background: var(--ink); opacity: .7; border-radius: 1px; transition: left .6s; }
+.gauge .g-dot { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; z-index: 1; border-radius: 50%; border: 2px solid var(--surface); transition: left .8s cubic-bezier(.2,.8,.2,1), background .3s; }
+.gauge .g-ghost { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; border: 2px dashed var(--muted); }
+.row .row-main .pct { width: 48px; text-align: right; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
+.row .row-main .act { width: 40px; text-align: center; flex: none; }
+
+/* ---------- 展開：股票橫條 ---------- */
+.hbar-wrap { display: flex; align-items: center; gap: 10px; }
+.hbar { flex: 1; display: flex; gap: 3px; height: 48px; min-width: 0; }
+.hseg { display: flex; min-width: 0; border-radius: 9px; overflow: hidden; }
+.hseg .keep { display: flex; flex-direction: column; justify-content: center; padding: 0 8px; min-width: 0; color: #fff; overflow: hidden; }
+.hseg .keep b { font-size: 14px; font-weight: 750; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.hseg .keep small { font-size: 11.5px; opacity: .9; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hseg .cut { display: flex; align-items: center; justify-content: center; min-width: 26px; }
+.hseg .cut.sell { background: repeating-linear-gradient(45deg, var(--critical) 0 6px, color-mix(in srgb, var(--critical) 55%, var(--surface)) 6px 12px); }
+.hseg .cut.buy { background: repeating-linear-gradient(45deg, var(--accent) 0 6px, color-mix(in srgb, var(--accent) 55%, var(--surface)) 6px 12px); }
+.hseg .cut.done { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--good) 35%, transparent) 0 6px, transparent 6px 12px); border: 2px dashed var(--good); border-radius: 0 9px 9px 0; }
+.hseg .cut em { font-style: normal; font-weight: 800; font-size: 12.5px; color: #fff; background: rgba(0,0,0,.45); padding: 1px 6px; border-radius: 999px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hseg .cut.done em { color: var(--good); background: var(--surface); }
+.hkey { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.hkey .sw-sell { width: 18px; height: 10px; border-radius: 3px; background: repeating-linear-gradient(45deg, var(--critical) 0 4px, color-mix(in srgb, var(--critical) 55%, var(--surface)) 4px 8px); }
+.edit-btn { margin-left: 0; }
+
+/* ---------- 展開：每檔一條橫條 ---------- */
+.hlist { display: grid; gap: 6px; }
+.hl { display: grid; grid-template-columns: 58px 1fr 46px; gap: 10px; align-items: center; }
+.hl-sym { font-weight: 750; font-size: 14px; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hl-track { display: flex; height: 26px; border-radius: 7px; background: var(--surface-2); overflow: hidden; }
+.hl-keep { display: flex; align-items: center; padding-left: 8px; min-width: 2px; color: #fff; overflow: hidden; transition: width .7s cubic-bezier(.2,.8,.2,1); }
+.hl-keep small { font-size: 12px; font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.hl-cut { min-width: 4px; transition: width .7s cubic-bezier(.2,.8,.2,1); }
+.hl-cut.sell { background: repeating-linear-gradient(45deg, var(--critical) 0 5px, color-mix(in srgb, var(--critical) 50%, var(--surface)) 5px 10px); }
+.hl-cut.buy { background: repeating-linear-gradient(45deg, var(--accent) 0 5px, color-mix(in srgb, var(--accent) 50%, var(--surface)) 5px 10px); }
+.hl-cut.done { background: none; border: 2px dashed var(--muted); border-left: 0; border-radius: 0 7px 7px 0; }
+.hl em { font-style: normal; font-weight: 800; font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+.hl em.sell { color: var(--critical); }
+.hl em.buy { color: var(--accent); }
+.hl em.done { color: var(--good); }
+.hkey { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.hkey .sp { flex: 1; }
+.hkey .sw-sell, .hkey .sw-buy { width: 18px; height: 10px; border-radius: 3px; }
+.hkey .sw-sell { background: repeating-linear-gradient(45deg, var(--critical) 0 4px, color-mix(in srgb, var(--critical) 50%, var(--surface)) 4px 8px); }
+.hkey .sw-buy { background: repeating-linear-gradient(45deg, var(--accent) 0 4px, color-mix(in srgb, var(--accent) 50%, var(--surface)) 4px 8px); }
+
+/* ---------- 結論的交易小標籤 ---------- */
+.verdict .todo-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.vgroup { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.vgroup .sw { width: 10px; height: 10px; border-radius: 50%; }
+.vchip { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vchip b { font-weight: 800; letter-spacing: .02em; color: var(--ink); }
+.vchip.sell { background: color-mix(in srgb, var(--critical) 16%, transparent); color: var(--critical); }
+.vchip.buy { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.vchip.cash { background: var(--surface-2); color: var(--ink-2); }
+
 /* ---------- 正式版補充 ---------- */
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -380,8 +439,9 @@ dialog.dlg::backdrop { background: rgba(0, 0, 0, .55); }
 
 @media (max-width: 720px) {
   .row .row-main { flex-wrap: wrap; gap: 4px 10px; padding: 12px 8px; }
-  .row .row-main .nums { order: 5; flex-basis: 100%; padding-left: 22px; }
+  .row .row-main .gauge { order: 5; flex-basis: 100%; margin-left: 22px; min-width: 0; }
   .row .row-main .t { flex: 1; }
+  .hbar { height: 44px; }
   .row .detail-in { padding: 0 8px 12px; }
   .sum-line { margin: 4px 12px 0; }
   .onboard .steps { grid-template-columns: 1fr; }
