@@ -55,10 +55,11 @@
    * 回傳 { total, rows }；rows 每一列：板塊欄位 + value、weight（已四捨五入）、status、edge、toEdge、toTarget、count
    * status：'ok' | 'over' | 'under' | 'invalid'（區間設定有誤）| 'empty'（總市值為 0）
    */
-  function computePortfolio(sectors, holdings) {
+  function computePortfolio(sectors, holdings, extraCash) {
     var bySector = {}, count = {};
     sectors.forEach(function (s) { bySector[s.id] = 0; count[s.id] = 0; });
-    var total = 0;
+    // extraCash：調整後賣出所得的現金（不屬於任何板塊，但計入總市值）
+    var total = isNum(extraCash) ? extraCash : 0;
     holdings.forEach(function (h) {
       var v = holdingValue(h);
       total += v;
@@ -86,7 +87,50 @@
         toTarget: isNum(s.target) && total > 0 ? amountTo(total, weight, s.target) : 0,
       });
     });
-    return { total: total, rows: rows };
+    return { total: total, rows: rows, cash: isNum(extraCash) ? extraCash : 0 };
+  }
+
+  /**
+   * 超出區間時的交易建議：把「回到區間邊緣」的金額依板塊內各檔目前市值比例分配，
+   * 換算成整數股並無條件進位（確保交易後確實回到範圍內），賣出不超過持有股數。
+   * 在區間內回傳 null；板塊沒有持股時 trades 為空陣列。
+   */
+  function planTrades(row, holdings, total) {
+    if (!row || (row.status !== 'over' && row.status !== 'under')) return null;
+    var amount = ((row.edge - row.weight) / 100) * total;
+    var side = amount < 0 ? 'sell' : 'buy';
+    var list = holdings.filter(function (h) { return h.sectorId === row.id && holdingValue(h) > 0 && h.price > 0; });
+    var sum = list.reduce(function (a, h) { return a + holdingValue(h); }, 0);
+    var trades = list.map(function (h) {
+      var part = sum > 0 ? holdingValue(h) / sum : 1 / list.length;
+      var n = Math.ceil(Math.abs(amount * part) / h.price - 1e-9);
+      if (side === 'sell') n = Math.min(n, h.shares);
+      return { holdingId: h.id, sym: h.sym, side: side, shares: n, price: h.price, value: n * h.price, held: h.shares };
+    }).filter(function (t) { return t.shares > 0; });
+    var value = trades.reduce(function (a, t) { return a + t.value; }, 0);
+    return { sectorId: row.id, side: side, edge: row.edge, amount: amount, trades: trades, value: value };
+  }
+
+  /**
+   * 平衡前後：before 為目前狀態；plans 為每個超出板塊的建議；
+   * after 為照建議交易後的狀態（賣出所得留作現金、買入從現金支出，總市值不變）。
+   */
+  function rebalance(sectors, holdings) {
+    var before = computePortfolio(sectors, holdings);
+    var plans = {};
+    var after = holdings.map(function (h) { return Object.assign({}, h); });
+    var cash = 0;
+    before.rows.forEach(function (r) {
+      var p = planTrades(r, holdings, before.total);
+      if (!p) return;
+      plans[r.id] = p;
+      p.trades.forEach(function (t) {
+        var h = after.filter(function (x) { return x.id === t.holdingId; })[0];
+        h.shares += t.side === 'sell' ? -t.shares : t.shares;
+        cash += t.side === 'sell' ? t.value : -t.value;
+      });
+    });
+    return { before: before, plans: plans, after: computePortfolio(sectors, after, cash), cash: cash };
   }
 
   /** 各板塊目標合計，四捨五入到小數第一位 */
@@ -112,6 +156,8 @@
     classify: classify,
     amountTo: amountTo,
     computePortfolio: computePortfolio,
+    planTrades: planTrades,
+    rebalance: rebalance,
     targetSum: targetSum,
     axisMax: axisMax,
   };

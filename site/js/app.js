@@ -17,6 +17,7 @@
   if (!data) data = store.emptyData();
 
   var openId = null, focusId = null, first = true, dragging = null, scaleMax = null, dragEnded = 0;
+  var afterView = false; // 是否在看「照建議交易後」的樣子
   var untouched = {};   // 剛新增、還沒填過的持股，先不標紅框
   var quoteErr = {};    // 持股 id → 查價錯誤代碼（只存在記憶體）
   var symIndex = null, symNames = null, symLoading = null;
@@ -83,10 +84,17 @@
   }
 
   // ---------- 計算 ----------
+  // 回傳 { before, after, plans, cash }：目前狀態、照建議交易後的狀態、每個超出板塊的交易建議
   function compute() {
-    var p = calc.computePortfolio(data.sectors, data.holdings);
-    p.rows.forEach(function (r, i) { r.i = i; });
-    return p;
+    var R = calc.rebalance(data.sectors, data.holdings);
+    R.before.rows.forEach(function (r, i) { r.i = i; });
+    R.after.rows.forEach(function (r, i) { r.i = i; });
+    return R;
+  }
+  function isOut(r) { return r.status === 'over' || r.status === 'under'; }
+  function planSummary(p) {
+    if (!p.trades.length) return (p.side === 'sell' ? '賣出' : '買入') + '約 ' + usd(p.amount) + '（還沒有持股）';
+    return (p.side === 'sell' ? '賣 ' : '買 ') + p.trades.map(function (t) { return esc(t.sym) + ' ' + t.shares.toLocaleString('en-US'); }).join('、') + ' 股';
   }
 
   // ---------- 提醒列與選單 ----------
@@ -142,54 +150,126 @@
       '</div>';
   }
 
-  // ---------- 圓環 ----------
+  // ---------- 總市值 ----------
   function countTo(el, to) {
     var from = +el.dataset.v || 0, t0 = performance.now(), dur = first ? 1100 : 400;
     el.dataset.v = to;
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) { el.textContent = usd(to); return; }
     function step(t) {
-      var p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      var p = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - p, 3);
       el.textContent = usd(from + (to - from) * e);
       if (p < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
 
-  function renderDonut(p) {
-    var R = 90, C = 2 * Math.PI * R, gap = 2.2, acc = 0;
-    var g = $('#slices');
-    p.rows.forEach(function (r, idx) {
-      var c = g.querySelector('[data-id="' + r.id + '"]');
-      if (!c) {
-        c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        c.setAttribute('class', 'slice'); c.setAttribute('r', R);
-        c.dataset.id = r.id; c.style.strokeDasharray = '0 ' + C;
-      }
-      if (g.children[idx] !== c) g.insertBefore(c, g.children[idx] || null);
-      var f = p.total > 0 ? r.value / p.total : 0;
-      var len = Math.max(f * C - (f > 0 ? gap : 0), 0), off = -acc * C;
-      c.style.stroke = color(r.i);
-      requestAnimationFrame(function () { c.style.strokeDasharray = len + ' ' + C; c.style.strokeDashoffset = off; });
-      acc += f;
-      c.classList.toggle('on', r.id === focusId);
-    });
-    Array.prototype.slice.call(g.children).forEach(function (c) { if (!p.rows.some(function (r) { return r.id === c.dataset.id; })) c.remove(); });
-    $('#donut').classList.toggle('has-focus', !!focusId);
+  function renderTotal(R) {
+    var src = afterView ? R.after : R.before;
+    $('#total-label').textContent = afterView ? '調整後總市值' : '總市值';
+    countTo($('#total-v'), src.total);
+    $('#total-sub').textContent = src.rows.length + ' 個板塊・' + data.holdings.length + ' 檔持股';
+    var outs = R.before.rows.filter(isOut).length;
+    var b = $('#after-btn');
+    b.textContent = afterView ? '回到目前' : outs ? '看調整後' : '不需要調整';
+    b.classList.toggle('on', afterView);
+    b.disabled = !afterView && !outs;
+    b.setAttribute('aria-pressed', String(afterView));
+  }
 
-    var center = $('#center');
-    var fr = p.rows.filter(function (r) { return r.id === focusId; })[0];
-    if (fr) {
-      center.innerHTML = '<div><small>' + esc(fr.name || '未命名') + '</small><b>' + fr.weight.toFixed(1) + '%</b><span>' + usd(fr.value) + '・目標 ' + fmtP(fr.target) + '</span></div>';
-    } else {
-      if (!center.querySelector('#tv')) center.innerHTML = '<div><small>總市值</small><b id="tv" data-v="0">$0</b><span></span></div>';
-      center.querySelector('span').textContent = p.rows.length + ' 個板塊・' + data.holdings.length + ' 檔持股';
-      countTo(center.querySelector('#tv'), p.total);
+  // ---------- 配置流向圖：上排目標、下排目前（或調整後），彩帶連接同一個板塊 ----------
+  var flowShown = null, flowRaf = null;
+  var FBAR = 46, FYT = 22, FYB = 222;
+
+  function renderFlow(R) {
+    var src = afterView ? R.after : R.before;
+    var goal = {}, goalCash = afterView && R.cash > 0 && src.total > 0 ? (R.cash / src.total) * 100 : 0;
+    src.rows.forEach(function (r) { goal[r.id] = r.weight; });
+    if (!flowShown) {
+      flowShown = { w: {}, cash: 0 };
+      src.rows.forEach(function (r) { flowShown.w[r.id] = calc.isNum(r.target) ? r.target : 0; });
     }
+    var from = { w: Object.assign({}, flowShown.w), cash: flowShown.cash };
+    var instant = !!dragging || matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var t0 = performance.now(), dur = instant ? 0 : 800;
+    cancelAnimationFrame(flowRaf);
+    function frame(now) {
+      var p = dur ? Math.max(0, Math.min(1, (now - t0) / dur)) : 1, e = 1 - Math.pow(1 - p, 3);
+      var w = {};
+      src.rows.forEach(function (r) { var a = from.w[r.id]; if (a == null) a = goal[r.id]; w[r.id] = a + (goal[r.id] - a) * e; });
+      flowShown = { w: w, cash: from.cash + (goalCash - from.cash) * e };
+      drawFlow(R, src, flowShown);
+      if (p < 1) flowRaf = requestAnimationFrame(frame);
+    }
+    if (instant) frame(t0); else flowRaf = requestAnimationFrame(frame);
+  }
+
+  function drawFlow(R, src, shown) {
+    var svg = $('#flow');
+    var rows = src.rows;
+    if (!rows.length) { svg.innerHTML = ''; return; }
+    // 窄螢幕用較窄的畫布，讓色塊與文字不會被縮得太小
+    var vw = svg.clientWidth && svg.clientWidth < 600 ? 400 : 880;
+    if (svg.getAttribute('viewBox') !== '0 0 ' + vw + ' 300') svg.setAttribute('viewBox', '0 0 ' + vw + ' 300');
+    var FX0 = vw < 600 ? 40 : 60, FX1 = vw - 4;
+    var span = FX1 - FX0, gap = 4;
+    var tSum = rows.reduce(function (a, r) { return a + (calc.isNum(r.target) ? r.target : 0); }, 0);
+    var bSum = rows.reduce(function (a, r) { return a + shown.w[r.id]; }, 0) + shown.cash;
+    var g = '<text x="0" y="' + (FYT + FBAR / 2 + 5) + '" class="row-lbl">目標</text>' +
+      '<text x="0" y="' + (FYB + FBAR / 2 + 5) + '" class="row-lbl">' + (afterView ? '調整後' : '目前') + '</text>';
+    if (tSum <= 0) { svg.innerHTML = g; return; }
+    var at = 0, ab = 0, labels = '';
+    rows.forEach(function (r) {
+      var tv = calc.isNum(r.target) ? r.target : 0, w = shown.w[r.id];
+      var t0 = FX0 + (at / tSum) * span, t1 = FX0 + ((at + tv) / tSum) * span;
+      var b0 = bSum > 0 ? FX0 + (ab / bSum) * span : t0, b1 = bSum > 0 ? FX0 + ((ab + w) / bSum) * span : t0;
+      at += tv; ab += w;
+      var valid = r.status !== 'invalid';
+      var rw = calc.r1(w);
+      var out = valid && bSum > 0 && (rw > r.hi || rw < r.lo);
+      var fixed = afterView && R.plans[r.id] && !out;
+      var yt = FYT + FBAR, yb = FYB, my = (yt + yb) / 2;
+      var hasB = b1 - b0 > gap, hasT = t1 - t0 > gap;
+      var ribbon = hasT && hasB
+        ? 'M ' + (t0 + gap / 2) + ' ' + yt + ' C ' + (t0 + gap / 2) + ' ' + my + ', ' + (b0 + gap / 2) + ' ' + my + ', ' + (b0 + gap / 2) + ' ' + yb +
+          ' L ' + (b1 - gap / 2) + ' ' + yb + ' C ' + (b1 - gap / 2) + ' ' + my + ', ' + (t1 - gap / 2) + ' ' + my + ', ' + (t1 - gap / 2) + ' ' + yt + ' Z'
+        : '';
+      var cxT = (t0 + t1) / 2, cxB = (b0 + b1) / 2;
+      var ink = r.i % 7 === 3 ? '#1a1a19' : '#fff';
+      var on = r.id === focusId || r.id === openId;
+      g += '<g class="fx' + (on ? ' on' : '') + '" data-s="' + esc(r.id) + '">' +
+        (ribbon ? '<path class="' + (out ? 'pulse' : '') + '" d="' + ribbon + '" fill="' + (out ? 'var(--critical)' : fixed ? 'var(--good)' : color(r.i)) + '" fill-opacity="' + (out ? 0.42 : fixed ? 0.3 : 0.22) + '"/>' : '') +
+        (out && ribbon ? '<path class="flowing" d="M ' + cxT + ' ' + (yt + 4) + ' C ' + cxT + ' ' + my + ', ' + cxB + ' ' + my + ', ' + cxB + ' ' + (yb - 4) + '" stroke="#fff" stroke-opacity=".75" stroke-width="2.5" fill="none" stroke-linecap="round"/>' : '') +
+        (hasT ? '<rect x="' + (t0 + gap / 2) + '" y="' + FYT + '" width="' + (t1 - t0 - gap) + '" height="' + FBAR + '" rx="9" fill="' + color(r.i) + '"/>' : '') +
+        (hasB ? '<rect x="' + (b0 + gap / 2) + '" y="' + FYB + '" width="' + (b1 - b0 - gap) + '" height="' + FBAR + '" rx="9" fill="' + color(r.i) + '"' + (out ? ' stroke="var(--critical)" stroke-width="3"' : fixed ? ' stroke="var(--good)" stroke-width="3"' : '') + '/>' : '') +
+        (t1 - t0 > 46 ? '<text x="' + cxT + '" y="' + (FYT + 20) + '" text-anchor="middle" class="seg-name" style="fill:' + ink + '">' + esc(r.name || '未命名') + '</text><text x="' + cxT + '" y="' + (FYT + 36) + '" text-anchor="middle" class="seg-pct" style="fill:' + ink + '">' + fmtP(tv) + '</text>' : '') +
+        (b1 - b0 > 46 ? '<text x="' + cxB + '" y="' + (FYB + 20) + '" text-anchor="middle" class="seg-name" style="fill:' + ink + '">' + esc(r.name || '未命名') + '</text><text x="' + cxB + '" y="' + (FYB + 36) + '" text-anchor="middle" class="seg-pct" style="fill:' + ink + '">' + w.toFixed(1) + '%</text>' : '') +
+        '</g>';
+      var lx = (cxT + cxB) / 2, dev = w - tv, sg = (dev > 0 ? '+' : dev < 0 ? '−' : '±') + Math.abs(dev).toFixed(1);
+      var plan = R.plans[r.id];
+      if (out && plan && !afterView) {
+        var txt = sg + ' 點・' + (plan.side === 'sell' ? '賣 ' : '買 ') + usd(plan.trades.length ? plan.value : plan.amount);
+        var wd = txt.length * 8 + 26;
+        var lxc = Math.max(wd / 2 + 2, Math.min(vw - wd / 2 - 2, lx)); // 標籤不要超出畫布
+        labels += '<g pointer-events="none" transform="translate(' + lxc + ',' + my + ')"><rect x="' + (-wd / 2) + '" y="-15" width="' + wd + '" height="30" rx="15" fill="var(--critical)"/><text text-anchor="middle" y="5" style="fill:#fff;font-weight:700;font-size:13px">' + txt + '</text></g>';
+      } else if (fixed) {
+        labels += '<g pointer-events="none" transform="translate(' + lx + ',' + my + ')"><rect x="-50" y="-15" width="100" height="30" rx="15" fill="var(--good)"/><text text-anchor="middle" y="5" style="fill:#06240f;font-weight:700;font-size:13px">✓ ' + sg + ' 點</text></g>';
+      } else if (bSum > 0 && hasT) {
+        labels += '<text x="' + lx + '" y="' + (my + 4) + '" text-anchor="middle" class="dev" pointer-events="none">' + sg + '</text>';
+      }
+    });
+    if (shown.cash > 0.05 && bSum > 0) {
+      var c0 = FX0 + (ab / bSum) * span, c1 = FX0 + ((ab + shown.cash) / bSum) * span;
+      g += '<rect x="' + (c0 + 2) + '" y="' + FYB + '" width="' + Math.max(0, c1 - c0 - 4) + '" height="' + FBAR + '" rx="9" fill="var(--muted)" fill-opacity=".55" stroke="var(--muted)" stroke-dasharray="4 3"/>' +
+        '<text x="' + Math.min(c1, FX1) + '" y="' + (FYB + FBAR + 18) + '" text-anchor="end" class="row-lbl">現金 +' + usd(R.cash) + '</text>';
+    }
+    if (bSum <= 0) labels += '<text x="' + ((FX0 + FX1) / 2) + '" y="' + (FYB + FBAR / 2 + 5) + '" text-anchor="middle" class="row-lbl">還沒有持股</text>';
+    svg.innerHTML = g + labels;
+    svg.classList.toggle('dimmed', !!focusId);
   }
 
   // ---------- 結論 ----------
-  function renderVerdict(p) {
-    var v = $('#verdict');
+  function renderVerdict(R) {
+    var v = $('#verdict'), p = R.before;
     if (!p.rows.length) {
       v.className = 'verdict ok';
       v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先新增板塊</h2><p>按下方「新增板塊」，再拖曳設定目標與允許區間。</p>';
@@ -200,14 +280,21 @@
       v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先在板塊裡新增持股</h2><p>點板塊名稱展開，按「新增持股」並搜尋代號，填入股數後就會開始計算。</p>';
       return;
     }
-    var outs = p.rows.filter(function (r) { return r.status === 'over' || r.status === 'under'; });
+    var outs = p.rows.filter(isOut);
     var bad = p.rows.filter(function (r) { return r.status === 'invalid'; });
+    if (afterView) {
+      var still = R.after.rows.filter(isOut);
+      v.className = 'verdict ' + (still.length ? 'bad' : 'ok');
+      v.innerHTML = '<h2><span class="ic">' + (still.length ? ICON.warn : ICON.ok) + '</span>' + (still.length ? '調整後仍有 ' + still.length + ' 個板塊要手動處理' : '調整後，每個板塊都在範圍內') + '</h2>' +
+        '<p>' + (R.cash > 0 ? '賣出的 ' + usd(R.cash) + ' 先留作現金，總市值不變。' : R.cash < 0 ? '買入需要另外準備 ' + usd(R.cash) + '。' : '') + '下排是照建議交易後的比例，虛線圓點是原本的位置。</p>';
+      return;
+    }
     if (outs.length) {
       v.className = 'verdict bad';
-      v.innerHTML = '<h2><span class="ic">' + ICON.warn + '</span>' + outs.length + ' 個板塊超出區間</h2>' +
-        '<p>其他 ' + (p.rows.length - outs.length) + ' 個板塊都在允許範圍內，不用動。下面是最少要調整的金額：</p>' +
+      v.innerHTML = '<h2><span class="ic">' + ICON.warn + '</span>' + outs.map(function (r) { return esc(r.name || '未命名') + (r.status === 'over' ? '太多了' : '太少了'); }).join('、') + '</h2>' +
+        '<p>其他板塊都在範圍內，不用動。照下面的建議交易，就能回到範圍內：</p>' +
         '<div class="todo-pills">' + outs.map(function (r) {
-          return '<button class="pill" type="button" data-open="' + esc(r.id) + '"><i class="sw" style="background:' + color(r.i) + '"></i>' + esc(r.name || '未命名') + '<b>' + verb(r.toEdge) + ' ' + usd(r.toEdge) + '</b>' + ICON.chevR + '</button>';
+          return '<button class="pill" type="button" data-open="' + esc(r.id) + '"><i class="sw" style="background:' + color(r.i) + '"></i>' + esc(r.name || '未命名') + '<b>' + planSummary(R.plans[r.id]) + '</b>' + ICON.chevR + '</button>';
         }).join('') + '</div>';
     } else {
       v.className = 'verdict ok';
@@ -235,16 +322,17 @@
     el.innerHTML = '<div class="row-main">' +
       '<button class="name" type="button" aria-expanded="false">' + ICON.chev + '<i class="sw"></i><span class="t"></span><span class="wm"></span></button>' +
       '<div class="track">' +
-      '<span class="band"></span><span class="target"></span><span class="gap"></span><span class="gap-label"></span><span class="dot"></span>' +
+      '<span class="band"></span><span class="target"></span><span class="gap"></span><span class="gap-label"></span><span class="dot ghost" hidden></span><span class="dot now"></span>' +
       ['lo', 'target', 'hi'].map(function (k) {
         return '<span class="h ' + (k === 'target' ? 'tgt' : 'edge') + '" data-edge="' + k + '" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100"><span class="lab"></span></span>';
       }).join('') +
       '</div><span class="w"></span><span class="act"></span></div>' +
-      '<div class="detail"><div><div class="detail-in"><div class="stats"></div><div class="hold"></div></div></div></div>';
+      '<div class="detail"><div><div class="detail-in"><div class="stats"></div><div class="planbox"></div><div class="hold"></div></div></div></div>';
     return el;
   }
 
-  function renderRows(p) {
+  function renderRows(R) {
+    var p = R.before;
     var box = $('#rows');
     if (!p.rows.length) {
       box.innerHTML = '<div class="rows-empty">還沒有板塊。按下方「新增板塊」開始。</div>';
@@ -263,7 +351,7 @@
       if (fresh) {
         el = buildRow(r);
         var startAt = calc.isNum(r.target) ? x(r.target) : 0;
-        el.querySelector('.dot').style.left = startAt + '%';
+        el.querySelector('.dot.now').style.left = startAt + '%';
         el.querySelector('.band').style.left = startAt + '%';
         el.querySelector('.band').style.width = '0%';
         el.querySelector('.target').style.left = startAt + '%';
@@ -278,14 +366,18 @@
         for (var t = 0; t <= max; t += 5) { var k = document.createElement('i'); k.className = 'tick'; k.style.left = x(t) + '%'; tr.insertBefore(k, tr.firstChild); }
         tr.dataset.max = String(max);
       }
+      var plan = R.plans[r.id];
+      var d = afterView ? R.after.rows[idx] : r; // 畫面上顯示的狀態
       el.querySelector('.sw').style.background = color(r.i);
       el.querySelector('.t').textContent = r.name || '未命名';
-      el.querySelector('.wm').textContent = r.weight.toFixed(1) + '%';
-      el.querySelector('.w').textContent = r.weight.toFixed(1) + '%';
-      var dot = el.querySelector('.dot');
+      el.querySelector('.wm').textContent = d.weight.toFixed(1) + '%';
+      el.querySelector('.w').textContent = d.weight.toFixed(1) + '%';
+      var dot = el.querySelector('.dot.now');
+      var ghost = el.querySelector('.dot.ghost');
       dot.style.background = color(r.i);
-      var isOut = r.status === 'over' || r.status === 'under';
+      var isOut = d.status === 'over' || d.status === 'under';
       dot.classList.toggle('out', isOut);
+      ghost.hidden = !(afterView && plan);
       var valid = r.status !== 'invalid';
       el.querySelector('.band').style.visibility = valid ? '' : 'hidden';
 
@@ -297,7 +389,8 @@
           el.querySelector('.band').style.width = (x(r.hi) - x(r.lo)) + '%';
         }
         el.querySelector('.target').style.left = x(calc.isNum(r.target) ? r.target : 0) + '%';
-        dot.style.left = x(r.weight) + '%';
+        dot.style.left = x(d.weight) + '%';
+        ghost.style.left = x(r.weight) + '%';
         Object.keys(hs).forEach(function (k) {
           var v = calc.isNum(r[k]) ? r[k] : 0;
           hs[k].style.left = x(v) + '%';
@@ -307,22 +400,25 @@
           hs[k].setAttribute('aria-label', (r.name || '未命名') + ' ' + EDGE_LABEL[k]);
         });
         if (isOut) {
-          var a = Math.min(r.edge, r.weight), b = Math.max(r.edge, r.weight);
+          var a = Math.min(d.edge, d.weight), b = Math.max(d.edge, d.weight);
           gapEl.style.left = x(a) + '%'; gapEl.style.width = (x(b) - x(a)) + '%';
           gl.style.left = x((a + b) / 2) + '%';
-          gl.textContent = (r.status === 'over' ? '+' : '−') + Math.abs(calc.r1(r.weight - r.edge)).toFixed(1) + ' 點';
+          gl.textContent = (d.status === 'over' ? '+' : '−') + Math.abs(calc.r1(d.weight - d.edge)).toFixed(1) + ' 點';
         }
         gapEl.classList.toggle('on', isOut); gl.classList.toggle('on', isOut);
       };
       if (fresh && first) requestAnimationFrame(function () { requestAnimationFrame(apply); }); else apply();
 
       var act = el.querySelector('.act');
-      if (isOut) act.innerHTML = '<span class="chip bad">' + ICON.warn + verb(r.toEdge) + ' ' + usd(r.toEdge) + '</span><small>' + (r.status === 'over' ? '超出上限 ' : '低於下限 ') + fmtP(r.edge) + '</small>';
+      if (afterView && plan && !isOut) act.innerHTML = '<span class="chip ok">' + ICON.ok + '已調整</span><small>原本 ' + r.weight.toFixed(1) + '%</small>';
+      else if (isOut && plan && !afterView) act.innerHTML = '<span class="chip bad">' + ICON.warn + (plan.side === 'sell' ? '賣出 ' : '買入 ') + usd(plan.trades.length ? plan.value : plan.amount) + '</span><small>' + (r.status === 'over' ? '超出上限 ' : '低於下限 ') + fmtP(r.edge) + '</small>';
+      else if (isOut) act.innerHTML = '<span class="chip bad">' + ICON.warn + '仍超出</span><small>需要手動處理</small>';
       else if (r.status === 'invalid') act.innerHTML = '<span class="chip neutral">' + ICON.warn + '區間設定有誤</span><small>拖曳把手修正</small>';
       else if (r.status === 'empty') act.innerHTML = '<span class="chip neutral">尚無持股</span>';
       else act.innerHTML = '<span class="chip ok">' + ICON.ok + '區間內</span>';
 
       renderStats(el, r, p.total);
+      renderPlan(el, r, plan, R.after.rows[idx]);
       updateHoldingCells(el, r);
       el.classList.toggle('open', openId === r.id);
       el.classList.toggle('hl', focusId === r.id);
@@ -344,6 +440,25 @@
       '<div class="stat ' + (isOut ? 'do' : valid ? 'fine' : '') + '"><small>允許區間 ' + (valid ? fmtP(r.lo) + '–' + fmtP(r.hi) : '設定有誤') + '</small><b>' +
       (valid ? usd((r.lo / 100) * total) + '–' + usd((r.hi / 100) * total).slice(1) : '—') + '</b><span>' +
       (isOut ? verb(r.toEdge) + ' ' + usd(r.toEdge) + ' 回到區間' : room) + '</span></div>';
+  }
+
+  // 建議交易：超出區間時，列出每檔要買賣幾股（賣回上限或買回下限）
+  function renderPlan(el, r, plan, after) {
+    var box = el.querySelector('.planbox');
+    if (!plan) { box.innerHTML = ''; return; }
+    var sell = plan.side === 'sell';
+    var goalTxt = (sell ? '賣回上限 ' : '買回下限 ') + fmtP(plan.edge);
+    if (!plan.trades.length) {
+      box.innerHTML = '<div class="plan ' + (sell ? '' : 'buy') + '"><h4>建議交易<span>' + goalTxt + '</span></h4><p>這個板塊還沒有持股，' + (sell ? '' : '需要買入約 ' + usd(plan.amount) + '，') + '請先新增想' + (sell ? '賣' : '買') + '的標的。</p></div>';
+      return;
+    }
+    box.innerHTML = '<div class="plan ' + (afterView ? 'done' : sell ? '' : 'buy') + '">' +
+      '<h4>' + (afterView ? '已模擬交易' : '建議交易') + '<span>' + goalTxt + '・共 ' + usd(plan.value) + '</span></h4>' +
+      '<ul>' + plan.trades.map(function (t) {
+        return '<li><b>' + esc(t.sym) + '</b><span class="' + t.side + '">' + (t.side === 'sell' ? '賣 ' : '買 ') + t.shares.toLocaleString('en-US') + ' 股</span>' +
+          '<small>約 ' + usd(t.value) + '・' + t.held.toLocaleString('en-US') + ' → ' + (t.held + (t.side === 'sell' ? -t.shares : t.shares)).toLocaleString('en-US') + ' 股</small></li>';
+      }).join('') + '</ul>' +
+      '<p>' + r.weight.toFixed(1) + '% → 約 ' + after.weight.toFixed(1) + '%。股數依各檔目前比例分配並無條件進位，確保交易後回到範圍內。</p></div>';
   }
 
   // 持股明細：結構改變時才重建；打字時只更新計算欄位
@@ -409,7 +524,8 @@
     $('#main').hidden = onboarding;
     if (onboarding) { renderOnboarding(); return; }
     var p = compute();
-    renderDonut(p);
+    renderTotal(p);
+    renderFlow(p);
     renderVerdict(p);
     renderSum();
     renderRows(p);
@@ -588,7 +704,12 @@
     choose(comboFor, comboItems[+o.dataset.i]);
   });
   window.addEventListener('scroll', function () { if (comboFor) positionCombo(comboFor); }, { passive: true });
-  window.addEventListener('resize', function () { if (comboFor) positionCombo(comboFor); });
+  var resizeT;
+  window.addEventListener('resize', function () {
+    if (comboFor) positionCombo(comboFor);
+    clearTimeout(resizeT);
+    resizeT = setTimeout(function () { if (!onboarding) renderFlow(compute()); }, 150);
+  });
 
   // ---------- 報價 ----------
   function setPm(h, text, loading) {
@@ -762,7 +883,7 @@
         incoming.prefs.theme = data.prefs.theme; // 深淺色是這台裝置的偏好
         data = incoming;
         untouched = {}; quoteErr = {}; openId = null; onboarding = false;
-        $('#rows').innerHTML = ''; $('#slices').innerHTML = '';
+        $('#rows').innerHTML = ''; flowShown = null; afterView = false;
         commit();
         toast('已匯入備份');
       });
@@ -891,12 +1012,19 @@
     if (focusId === id) return;
     focusId = id;
     if (onboarding) return;
-    renderDonut(compute());
+    var svg = $('#flow');
+    svg.classList.toggle('dimmed', !!focusId);
+    Array.prototype.slice.call(svg.querySelectorAll('.fx')).forEach(function (g) { g.classList.toggle('on', g.dataset.s === focusId || g.dataset.s === openId); });
     Array.prototype.slice.call(document.querySelectorAll('.row')).forEach(function (el) { el.classList.toggle('hl', el.dataset.id === focusId); });
   }
-  $('#slices').addEventListener('pointerover', function (e) { var c = e.target.closest('.slice'); if (c) setFocus(c.dataset.id); });
-  $('#slices').addEventListener('pointerout', function () { setFocus(null); });
-  $('#slices').addEventListener('click', function (e) { var c = e.target.closest('.slice'); if (c) toggle(c.dataset.id, true); });
+  $('#flow').addEventListener('pointerover', function (e) { var g = e.target.closest('.fx'); setFocus(g ? g.dataset.s : null); });
+  $('#flow').addEventListener('pointerleave', function () { setFocus(null); });
+  $('#flow').addEventListener('click', function (e) { var g = e.target.closest('.fx'); if (g) toggle(g.dataset.s, true); });
+  $('#after-btn').addEventListener('click', function () {
+    afterView = !afterView;
+    render();
+    if (afterView) toast('這是照建議交易後的樣子，實際交易請自行在券商操作');
+  });
   $('#rows').addEventListener('pointerover', function (e) { var r = e.target.closest('.row'); if (r && !dragging) setFocus(r.dataset.id); });
   $('#rows').addEventListener('pointerleave', function () { if (!dragging) setFocus(null); });
 
@@ -908,7 +1036,10 @@
   render();
   if (!onboarding) {
     // 空閒時先載入代號清單，讓公司名稱可以顯示
-    (window.requestIdleCallback || setTimeout)(function () { ensureSymbols(); }, 800);
+    // requestIdleCallback 的第二個參數必須是物件，所以先用 setTimeout 延遲，再交給閒置時間執行
+    setTimeout(function () {
+      if (window.requestIdleCallback) window.requestIdleCallback(ensureSymbols); else ensureSymbols();
+    }, 800);
     // 開啟時距上次更新超過 15 分鐘就自動更新報價
     var last = data.meta.lastQuoteAt ? Date.parse(data.meta.lastQuoteAt) : 0;
     if (storage.getApiKey() && Date.now() - last > 15 * 60 * 1000) refreshAll(true);

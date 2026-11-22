@@ -60,11 +60,20 @@
 
   <section class="card" id="main" hidden>
     <div class="hero">
-      <div class="donut" id="donut">
-        <svg viewBox="-120 -120 240 240" aria-hidden="true"><circle class="track-ring" r="90"/><g id="slices"></g></svg>
-        <div class="center" id="center"></div>
+      <div class="hero-top">
+        <div class="verdict" id="verdict" aria-live="polite"></div>
+        <div class="hero-side">
+          <div class="total"><small id="total-label">總市值</small><b id="total-v">$0</b><span id="total-sub"></span></div>
+          <button class="after-btn" id="after-btn" type="button">看調整後</button>
+        </div>
       </div>
-      <div class="verdict" id="verdict" aria-live="polite"></div>
+      <div class="flow-wrap">
+        <svg id="flow" viewBox="0 0 880 300" role="img" aria-label="目標配置與目前配置的流向圖"></svg>
+      </div>
+      <div class="flow-legend" aria-hidden="true">
+        <span><i style="background:var(--ink-2);opacity:.35"></i>彩帶：同一個板塊從目標（上）到目前（下）</span>
+        <span><i style="background:var(--critical)"></i>紅色：超出區間，需要調整</span>
+      </div>
     </div>
 
     <div class="toolbar">

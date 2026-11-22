@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的倉位</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #0c0c0d; --surface: #171718; --surface-2: #222224;
+    --ink: #f2f1ee; --ink-2: #b9b8b0; --muted: #85847e; --line: rgba(255,255,255,.08);
+    --good: #34c759; --bad: #ff5a5f; --accent: #3987e5;
+    --c1: #3987e5; --c2: #f07a45; --c3: #1fb784; --c4: #e2a321; --c5: #e0679a; --c6: #8bd346; --cash: #6b6a70;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 28px 18px 60px; }
+
+  /* 一句話 */
+  .say { text-align: center; margin-bottom: 8px; }
+  .say h1 { margin: 0; font-size: 24px; font-weight: 750; letter-spacing: -.01em; }
+  .say h1 .bad { color: var(--bad); }
+  .say h1 .ok { color: var(--good); }
+  .say p { margin: 6px 0 0; color: var(--ink-2); }
+
+  /* 圓環 */
+  .ring { position: relative; width: min(320px, 82vw); margin: 18px auto 6px; }
+  .ring svg { width: 100%; height: auto; display: block; transform: rotate(-90deg); }
+  .ring circle { fill: none; transition: stroke-dasharray .9s cubic-bezier(.2,.8,.2,1), stroke-dashoffset .9s cubic-bezier(.2,.8,.2,1), opacity .3s; }
+  .ring .out-glow { stroke: var(--bad) !important; filter: drop-shadow(0 0 6px rgba(255,90,95,.95)); animation: blink 1.6s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .55; } }
+  .ring .mid { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; }
+  .ring .mid small { display: block; color: var(--muted); font-size: 13px; }
+  .ring .mid b { display: block; font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; }
+  .key { display: flex; justify-content: center; gap: 18px; color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .key span { display: inline-flex; align-items: center; gap: 6px; }
+  .key i { display: inline-block; border-radius: 3px; background: var(--ink-2); }
+
+  .toggle { display: block; margin: 0 auto 22px; height: 42px; padding: 0 20px; border-radius: 999px; border: 0; background: var(--surface-2); color: var(--ink); font-weight: 650; cursor: pointer; transition: background .2s; }
+  .toggle:hover { background: #2c2c2f; }
+  .toggle.on { background: var(--good); color: #06240f; }
+
+  /* 清單 */
+  .list { background: var(--surface); border-radius: 18px; overflow: hidden; }
+  .item { border-top: 1px solid var(--line); }
+  .item:first-child { border-top: 0; }
+  .row { width: 100%; display: grid; grid-template-columns: 12px 1fr auto auto; gap: 12px; align-items: center; padding: 15px 16px; border: 0; background: none; cursor: pointer; text-align: left; }
+  .row:hover { background: rgba(255,255,255,.03); }
+  .row i { width: 12px; height: 12px; border-radius: 50%; }
+  .row .nm { font-weight: 650; }
+  .row .pct { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .row .pct b { color: var(--ink); font-weight: 650; }
+  .row .st { min-width: 92px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .row .st.ok { color: var(--good); }
+  .row .st.bad { color: var(--bad); }
+  .row .st.buy { color: #8cc2ff; }
+  .how { display: none; padding: 0 16px 16px 40px; color: var(--ink-2); }
+  .item.open .how { display: block; }
+  .how ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .how li { display: flex; justify-content: space-between; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-variant-numeric: tabular-nums; }
+  .how li b { color: var(--ink); }
+  .how li span.sell { color: var(--bad); font-weight: 700; }
+  .how li span.buy { color: #8cc2ff; font-weight: 700; }
+  .how p { margin: 8px 2px 0; font-size: 13px; color: var(--muted); }
+  .foot { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 16px; }
+  @media (prefers-reduced-motion: reduce) { .ring circle { transition: none; } .ring .out-glow { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="say" id="say"></div>
+
+  <div class="ring">
+    <svg viewBox="0 0 200 200" aria-hidden="true">
+      <circle cx="100" cy="100" r="88" stroke="rgba(255,255,255,.06)" stroke-width="7"/>
+      <circle cx="100" cy="100" r="68" stroke="rgba(255,255,255,.06)" stroke-width="22"/>
+      <g id="outer"></g><g id="inner"></g>
+    </svg>
+    <div class="mid"><div><small id="mid-label">總值</small><b id="mid-total"></b></div></div>
+  </div>
+  <div class="key"><span><i style="width:16px;height:4px"></i>外圈：目標</span><span><i style="width:16px;height:10px"></i>內圈：目前</span></div>
+
+  <button class="toggle" id="toggle" type="button">看調整後 ▸</button>
+
+  <div class="list" id="list"></div>
+  <p class="foot">比目標多或少超過 5 個百分點才需要調整・範例資料</p>
+</div>
+
+<script>
+(() => {
+  const TOL = 5;
+  const SECTORS = [
+    { id: 'rocket', name: '火箭', target: 15 },
+    { id: 'optics', name: '光', target: 15 },
+    { id: 'software', name: '軟體', target: 20 },
+    { id: 'ev', name: '電動車', target: 15 },
+    { id: 'health', name: '醫療', target: 15 },
+    { id: 'semis', name: '半導體', target: 20 },
+  ];
+  const HOLDINGS = [
+    ['RKLB', 'rocket', 1000, 25], ['LUNR', 'rocket', 1500, 12],
+    ['COHR', 'optics', 250, 90], ['LITE', 'optics', 125, 80],
+    ['MSFT', 'software', 50, 480], ['CRM', 'software', 80, 275],
+    ['TSLA', 'ev', 50, 440], ['RIVN', 'ev', 500, 14],
+    ['LLY', 'health', 30, 800], ['ISRG', 'health', 19, 500],
+    ['NVDA', 'semis', 200, 185], ['TSM', 'semis', 70, 260], ['AMD', 'semis', 50, 216],
+  ].map(([sym, sector, shares, price]) => ({ sym, sector, shares, price }));
+  const color = (i) => `var(--c${i + 1})`;
+  const usd = (n) => '$' + Math.round(Math.abs(n)).toLocaleString('en-US');
+  const pct = (v) => Math.round(v) + '%';
+  let after = false, openId = null;
+
+  function weights(hs, cash) {
+    const v = {}; let total = cash || 0;
+    hs.forEach((h) => { v[h.sector] = (v[h.sector] || 0) + h.shares * h.price; total += h.shares * h.price; });
+    return { total, rows: SECTORS.map((s, i) => ({ ...s, i, value: v[s.id] || 0, w: total ? ((v[s.id] || 0) / total) * 100 : 0 })) };
+  }
+
+  // 超出範圍時：把金額依各檔比例分配成整數股，賣回上限（或買回下限），無條件進位確保回到範圍內
+  function plan(row, total) {
+    const hi = row.target + TOL, lo = Math.max(0, row.target - TOL);
+    const w = Math.round(row.w * 10) / 10;
+    if (w <= hi && w >= lo) return null;
+    const goal = w > hi ? hi : lo, amount = ((goal - row.w) / 100) * total;
+    const list = HOLDINGS.filter((h) => h.sector === row.id);
+    const sum = list.reduce((a, h) => a + h.shares * h.price, 0) || 1;
+    const trades = list.map((h) => {
+      let n = Math.ceil(Math.abs(amount * (h.shares * h.price) / sum) / h.price - 1e-9);
+      if (amount < 0) n = Math.min(n, h.shares);
+      return { sym: h.sym, n, side: amount < 0 ? 'sell' : 'buy', value: n * h.price };
+    }).filter((t) => t.n > 0);
+    return { side: amount < 0 ? 'sell' : 'buy', goal, trades, value: trades.reduce((a, t) => a + t.value, 0) };
+  }
+
+  function state() {
+    const before = weights(HOLDINGS);
+    const plans = Object.fromEntries(before.rows.map((r) => [r.id, plan(r, before.total)]));
+    if (!after) return { ...before, plans, before };
+    const hs = HOLDINGS.map((h) => ({ ...h }));
+    let cash = 0;
+    Object.values(plans).forEach((p) => p && p.trades.forEach((t) => {
+      const h = hs.find((x) => x.sym === t.sym);
+      h.shares += t.side === 'sell' ? -t.n : t.n;
+      cash += t.side === 'sell' ? t.value : -t.value;
+    }));
+    return { ...weights(hs, cash), cash, plans, before };
+  }
+
+  // 圓環（circle + dasharray，數值改變時有平滑動畫）
+  const C_OUT = 2 * Math.PI * 88, C_IN = 2 * Math.PI * 68;
+  function ring(g, r, C, width, parts) {
+    let acc = 0;
+    parts.forEach((p, k) => {
+      let c = g.children[k];
+      if (!c) { c = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); c.setAttribute('cx', 100); c.setAttribute('cy', 100); c.setAttribute('r', r); c.setAttribute('stroke-width', width); c.style.strokeDasharray = `0 ${C}`; g.appendChild(c); }
+      const len = Math.max(0, (p.v / 100) * C - (p.v > 0 ? 1.6 : 0));
+      c.style.stroke = p.color;
+      c.classList.toggle('out-glow', !!p.glow);
+      const off = -(acc / 100) * C;
+      acc += p.v;
+      requestAnimationFrame(() => { c.style.strokeDasharray = `${len} ${C}`; c.style.strokeDashoffset = off; });
+    });
+  }
+
+  function render() {
+    const S = state();
+    const outs = S.before.rows.filter((r) => S.plans[r.id]);
+    // 一句話
+    const say = document.getElementById('say');
+    if (after) {
+      say.innerHTML = `<h1><span class="ok">調整後：都在目標附近 ✓</span></h1><p>${S.cash > 0 ? '賣出的 ' + usd(S.cash) + ' 先留作現金' : S.cash < 0 ? '需要補入 ' + usd(S.cash) : '不需要交易'}</p>`;
+    } else if (outs.length) {
+      say.innerHTML = `<h1>${outs.map((r) => `<span class="bad">${r.name}${S.plans[r.id].side === 'sell' ? '太多' : '太少'}</span>`).join('、')}</h1>
+        <p>${outs.map((r) => { const p = S.plans[r.id]; return (p.side === 'sell' ? '賣 ' : '買 ') + p.trades.map((t) => `${t.sym} ${t.n} 股`).join('、'); }).join('；')}</p>`;
+    } else {
+      say.innerHTML = `<h1><span class="ok">都很好，不用動 ✓</span></h1><p>每個板塊都在目標附近</p>`;
+    }
+    // 圓環：外圈目標、內圈目前（調整後多一塊現金）
+    ring(document.getElementById('outer'), 88, C_OUT, 7, S.rows.map((r) => ({ v: r.target, color: color(r.i) })));
+    const inner = S.rows.map((r) => ({ v: r.w, color: color(r.i), glow: !after && S.plans[r.id] }));
+    inner.push({ v: after && S.cash > 0 ? (S.cash / S.total) * 100 : 0, color: 'var(--cash)' });
+    ring(document.getElementById('inner'), 68, C_IN, 22, inner);
+    document.getElementById('mid-label').textContent = after ? '調整後總值' : '總值';
+    document.getElementById('mid-total').textContent = usd(S.total);
+    const t = document.getElementById('toggle');
+    t.textContent = after ? '◂ 回到目前' : outs.length ? '看調整後 ▸' : '目前不用調整';
+    t.classList.toggle('on', after);
+    t.disabled = !after && !outs.length;
+    // 清單
+    document.getElementById('list').innerHTML = S.rows.map((r) => {
+      const p = S.plans[r.id], b = S.before.rows.find((x) => x.id === r.id);
+      const fixed = after && p;
+      const st = fixed ? `<span class="st ok">✓ ${pct(r.w)}</span>`
+        : p ? `<span class="st ${p.side === 'sell' ? 'bad' : 'buy'}">${p.side === 'sell' ? '賣' : '買'} ${usd(p.value)} ›</span>`
+        : `<span class="st ok">✓</span>`;
+      return `<div class="item${openId === r.id && p && !after ? ' open' : ''}">
+        <button class="row" type="button" data-id="${r.id}"><i style="background:${color(r.i)}"></i><span class="nm">${r.name}</span>
+          <span class="pct"><b>${pct(after ? r.w : b.w)}</b> → 目標 ${r.target}%</span>${st}</button>
+        ${p ? `<div class="how"><ul>${p.trades.map((x) => `<li><b>${x.sym}</b><span class="${x.side}">${x.side === 'sell' ? '賣' : '買'} ${x.n} 股</span><span>約 ${usd(x.value)}</span></li>`).join('')}</ul>
+          <p>${p.side === 'sell' ? '賣完' : '買完'}約 ${(b.w + (p.side === 'sell' ? -1 : 1) * (p.value / S.before.total) * 100).toFixed(1)}%，回到${p.side === 'sell' ? '上限' : '下限'} ${p.goal}% 以內</p></div>` : ''}
+      </div>`;
+    }).join('') + (after && S.cash > 0 ? `<div class="item"><div class="row" style="cursor:default"><i style="background:var(--cash)"></i><span class="nm">現金</span><span class="pct"><b>${pct((S.cash / S.total) * 100)}</b></span><span class="st" style="color:var(--ink-2)">+${usd(S.cash)}</span></div></div>` : '');
+  }
+
+  document.getElementById('toggle').addEventListener('click', () => { after = !after; render(); });
+  document.getElementById('list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-id]');
+    if (!b || after) return;
+    openId = openId === b.dataset.id ? null : b.dataset.id;
+    render();
+  });
+  openId = 'semis';
+  render();
+})();
+</script>
+</body>
+</html>

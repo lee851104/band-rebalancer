@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>雙層圓環（加強版）</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #0a0a0b; --surface: #161617; --surface-2: #212123; --surface-3: #2c2c2e;
+    --ink: #f2f1ee; --ink-2: #c3c2b7; --muted: #8a8983; --grid: #2a2a2b;
+    --border: rgba(255,255,255,.09);
+    --accent: #3987e5; --good: #22c55e; --critical: #ff5a5f;
+    --c1: #3987e5; --c2: #f07a45; --c3: #1fb784; --c4: #e2a321; --c5: #e0679a; --c6: #6dc93a; --c7: #77767d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(900px 600px at 30% 20%, rgba(57,135,229,.12), transparent 60%),
+      radial-gradient(700px 500px at 80% 80%, rgba(224,103,154,.08), transparent 60%),
+      var(--page);
+    min-height: 100vh;
+  }
+  button, input { font: inherit; color: inherit; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 56px; }
+  header { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  h1 { margin: 0; font-size: 20px; flex: 1; min-width: 200px; }
+  .seg { display: inline-flex; padding: 3px; border-radius: 11px; background: var(--surface-2); }
+  .seg button { border: 0; background: none; height: 32px; padding: 0 12px; border-radius: 8px; cursor: pointer; color: var(--ink-2); font-weight: 600; font-size: 13px; }
+  .seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+  .seg.view button[aria-pressed="true"][data-view="after"] { background: var(--good); color: #062b12; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 16px; color: var(--ink-2); }
+  .controls b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  input[type=range] { accent-color: var(--accent); width: 150px; vertical-align: middle; }
+  .btn { height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-weight: 600; font-size: 13px; }
+  .btn:hover { background: var(--surface-2); }
+  .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+  .btn.go { background: var(--good); border-color: transparent; color: #062b12; }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr); gap: 18px; align-items: start; }
+  .chart-card { position: relative; border-radius: 24px; background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)); border: 1px solid var(--border); padding: 10px 10px 30px; }
+  .chart-card svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .state-tag { position: absolute; top: 14px; left: 16px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); }
+  .state-tag.after { background: rgba(34,197,94,.18); color: #7ee2a0; }
+  svg text { fill: var(--ink-2); font-size: 13px; }
+  .lbl-name { fill: var(--ink); font-weight: 650; font-size: 14px; }
+  .lbl-sub { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .badge rect { fill: var(--surface-3); stroke: var(--border); }
+  .badge text { font-size: 12px; font-weight: 700; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .badge.bad rect { fill: rgba(255,90,95,.18); stroke: rgba(255,90,95,.6); }
+  .badge.bad text { fill: #ff9a9d; }
+  .badge.fixed rect { fill: rgba(34,197,94,.18); stroke: rgba(34,197,94,.6); }
+  .badge.fixed text { fill: #7ee2a0; }
+  .sec { cursor: pointer; transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s; }
+  .sec.lift { transform: translate(var(--dx), var(--dy)); }
+  .dim .sec:not(.on) { opacity: .22; }
+  .ribbon.bad { animation: breathe 1.8s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { opacity: .55; } 50% { opacity: .95; } }
+  .flow { stroke-dasharray: 2 10; animation: flow 1.2s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -24; } }
+  .ghost { fill: none; stroke: rgba(255,255,255,.55); stroke-width: 1.5; stroke-dasharray: 4 4; pointer-events: none; }
+  .center-big { fill: var(--ink); font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .center-bad { fill: #ff9a9d; font-weight: 700; }
+  .center-ok { fill: #7ee2a0; font-weight: 700; }
+  .hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; color: var(--muted); font-size: 12px; pointer-events: none; }
+
+  /* 右側面板 */
+  .panel { border-radius: 20px; background: var(--surface); border: 1px solid var(--border); padding: 18px; position: sticky; top: 16px; }
+  .panel h2 { margin: 0; font-size: 19px; display: flex; align-items: center; gap: 10px; }
+  .panel h2 i { width: 12px; height: 12px; border-radius: 50%; }
+  .panel .sub { color: var(--muted); margin: 4px 0 14px; font-variant-numeric: tabular-nums; }
+  .meter { position: relative; height: 54px; margin: 8px 0 14px; }
+  .meter .trk { position: absolute; left: 0; right: 0; top: 26px; height: 4px; border-radius: 2px; background: var(--grid); }
+  .meter .band { position: absolute; top: 17px; height: 22px; border-radius: 6px; background: rgba(34,197,94,.16); border: 1px solid rgba(34,197,94,.5); }
+  .meter .tgt { position: absolute; top: 12px; width: 2px; height: 32px; margin-left: -1px; background: var(--ink); border-radius: 1px; }
+  .meter .dot { position: absolute; top: 19px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; border: 3px solid var(--surface); }
+  .meter .dot.after { border-color: #7ee2a0; background: var(--surface) !important; box-shadow: 0 0 0 3px rgba(34,197,94,.25); }
+  .meter .arrow { position: absolute; top: 27px; height: 2px; background: repeating-linear-gradient(90deg, #ff9a9d 0 6px, transparent 6px 10px); }
+  .meter .lab { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .meter .lab.top { top: -4px; }
+  .meter .lab.bot { top: 42px; }
+  .call { padding: 14px; border-radius: 14px; margin-bottom: 12px; }
+  .call.sell { background: rgba(255,90,95,.12); border: 1px solid rgba(255,90,95,.35); }
+  .call.buy { background: rgba(57,135,229,.14); border: 1px solid rgba(57,135,229,.4); }
+  .call.ok { background: rgba(34,197,94,.10); border: 1px solid rgba(34,197,94,.35); }
+  .call .big { font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; }
+  .call small { display: block; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .modes { display: flex; gap: 6px; margin-bottom: 12px; }
+  .modes button { flex: 1; height: 34px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; font-weight: 600; font-size: 13px; color: var(--ink-2); }
+  .modes button[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); background: rgba(57,135,229,.15); }
+  .trades { display: grid; gap: 8px; }
+  .trade { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+  .trade b { font-size: 15px; letter-spacing: .02em; }
+  .trade b i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .trade .act { font-weight: 750; font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; }
+  .trade .act.sell { color: #ff9a9d; }
+  .trade .act.buy { color: #8cc2ff; }
+  .trade small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .trade small:last-child { text-align: right; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 12px; }
+  .empty { color: var(--ink-2); padding: 10px 2px; }
+  .list { display: grid; gap: 6px; }
+  .li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 12px; background: var(--surface-2); cursor: pointer; border: 1px solid transparent; }
+  .li:hover { border-color: var(--border); }
+  .li i { width: 10px; height: 10px; border-radius: 50%; }
+  .li .r { font-variant-numeric: tabular-nums; font-weight: 650; text-align: right; }
+  .li .r.bad { color: #ff9a9d; }
+  .li .r.ok { color: var(--muted); font-weight: 500; }
+  .li .r.fixed { color: #7ee2a0; }
+  .ba { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 6px 10px; align-items: center; font-variant-numeric: tabular-nums; margin: 6px 0 14px; }
+  .ba i { width: 9px; height: 9px; border-radius: 50%; }
+  .ba .h { color: var(--muted); font-size: 12px; }
+  .ba .bad { color: #ff9a9d; font-weight: 700; }
+  .ba .fixed { color: #7ee2a0; font-weight: 700; }
+  .ba .arr { color: var(--muted); }
+  .section-t { font-size: 13px; color: var(--muted); margin: 14px 0 8px; font-weight: 600; }
+
+  @media (max-width: 900px) { .stage { grid-template-columns: 1fr; } .panel { position: static; } }
+  @media (prefers-reduced-motion: reduce) { .ribbon.bad, .flow { animation: none; } .sec { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>倉位配置・距離目標</h1>
+    <div class="seg view" role="group" aria-label="平衡前後">
+      <button type="button" data-view="before" aria-pressed="true">平衡前（目前）</button>
+      <button type="button" data-view="after" aria-pressed="false">平衡後（照建議交易）</button>
+    </div>
+    <div class="seg" role="group" aria-label="樣式">
+      <button type="button" data-style="flow" aria-pressed="true">流帶雙環</button>
+      <button type="button" data-style="rose" aria-pressed="false">玫瑰花瓣</button>
+    </div>
+  </header>
+  <div class="controls">
+    <label>容忍範圍 ±<b id="tol-v">5</b> 點 <input type="range" id="tol" min="2" max="10" step="0.5" value="5"></label>
+    <button class="btn primary" id="shock" type="button">模擬一次市場波動</button>
+    <button class="btn" id="reset" type="button">回到範例</button>
+    <span style="color:var(--muted);font-size:12px">範例資料・價格為虛構</span>
+  </div>
+
+  <div class="stage">
+    <div class="chart-card">
+      <span class="state-tag" id="state-tag">平衡前</span>
+      <svg id="chart" viewBox="0 0 640 640" role="img" aria-label="目標與目前配置圖"></svg>
+      <div class="hint" id="hint">點任一個板塊，右邊會告訴你每檔要買賣幾股</div>
+    </div>
+    <aside class="panel" id="panel" aria-live="polite"></aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---------- 範例資料（與網站範例相同） ----------
+  const SECTORS = [
+    { id: 'rocket', name: '火箭', target: 15 },
+    { id: 'optics', name: '光', target: 15 },
+    { id: 'software', name: '軟體', target: 20 },
+    { id: 'ev', name: '電動車', target: 15 },
+    { id: 'health', name: '醫療', target: 15 },
+    { id: 'semis', name: '半導體', target: 20 },
+  ];
+  const BASE = [
+    ['RKLB', 'rocket', 1000, 25], ['LUNR', 'rocket', 1500, 12],
+    ['COHR', 'optics', 250, 90], ['LITE', 'optics', 125, 80],
+    ['MSFT', 'software', 50, 480], ['CRM', 'software', 80, 275],
+    ['TSLA', 'ev', 50, 440], ['RIVN', 'ev', 500, 14],
+    ['LLY', 'health', 30, 800], ['ISRG', 'health', 19, 500],
+    ['NVDA', 'semis', 200, 185], ['TSM', 'semis', 70, 260], ['AMD', 'semis', 50, 216],
+  ].map(([sym, sector, shares, price]) => ({ sym, sector, shares, price }));
+  let holdings = BASE.map((h) => ({ ...h }));
+
+  const color = (i) => `var(--c${i + 1})`;
+  const usd = (n) => '$' + Math.round(Math.abs(n)).toLocaleString('en-US');
+  const sgn = (v) => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v).toFixed(1);
+  const r1 = (n) => Math.round(n * 10) / 10;
+  let tol = 5, style = 'flow', selected = 'semis', hover = null, mode = 'edge', view = 'before';
+
+  // ---------- 計算 ----------
+  // cash：平衡後賣出所得（或買入所需）的現金，總市值不變
+  function compute(hs, cash) {
+    cash = cash || 0;
+    const v = Object.fromEntries(SECTORS.map((s) => [s.id, 0]));
+    let total = cash;
+    hs.forEach((h) => { const x = h.shares * h.price; v[h.sector] += x; total += x; });
+    const rows = SECTORS.map((s, i) => {
+      const w = total ? (v[s.id] / total) * 100 : 0, dev = w - s.target;
+      const out = r1(w) > s.target + tol || r1(w) < s.target - tol;
+      return { ...s, i, value: v[s.id], w, dev, out, edge: dev > 0 ? s.target + tol : s.target - tol };
+    });
+    rows.push({ id: 'cash', name: cash >= 0 ? '現金（賣出所得）' : '需補入資金', i: 6, target: 0, value: cash, w: total ? (Math.max(0, cash) / total) * 100 : 0, dev: 0, out: false, cash: true });
+    return { total, rows };
+  }
+
+  // ---------- 買賣股數建議 ----------
+  // 回到範圍：用無條件進位算股數，確保交易後確實回到上限（或下限）以內；回到目標：四捨五入
+  function suggest(row, total, how) {
+    if (row.cash) return { amount: 0, trades: [], goal: null };
+    const goal = how === 'target' ? row.target : row.out ? row.edge : null;
+    if (goal === null) return { amount: 0, trades: [], goal: null };
+    const amount = ((goal - row.w) / 100) * total;
+    const list = holdings.filter((h) => h.sector === row.id && h.price > 0);
+    const sum = list.reduce((a, h) => a + h.shares * h.price, 0);
+    const roundFn = how === 'target' ? Math.round : Math.ceil;
+    const trades = list.map((h) => {
+      const part = sum > 0 ? (h.shares * h.price) / sum : 1 / list.length;
+      let n = roundFn(Math.abs(amount * part) / h.price - 1e-9);
+      if (amount < 0) n = Math.min(n, h.shares);
+      return { sym: h.sym, sector: row.id, i: row.i, price: h.price, held: h.shares, shares: n, side: amount < 0 ? 'sell' : 'buy', value: n * h.price };
+    }).filter((t) => t.shares > 0);
+    return { amount, trades, goal };
+  }
+
+  // 平衡後：套用所有超出範圍板塊的建議交易（依目前選的方式）
+  function afterState() {
+    const before = compute(holdings);
+    const all = [];
+    before.rows.forEach((r) => { if (r.out) all.push(...suggest(r, before.total, mode).trades); });
+    const hs = holdings.map((h) => ({ ...h }));
+    let cash = 0;
+    all.forEach((t) => {
+      const h = hs.find((x) => x.sym === t.sym);
+      h.shares += t.side === 'sell' ? -t.shares : t.shares;
+      cash += t.side === 'sell' ? t.value : -t.value;
+    });
+    return { ...compute(hs, cash), trades: all, cash, before };
+  }
+
+  // ---------- 幾何工具 ----------
+  const CX = 320, CY = 320;
+  const P = (r, a) => [CX + r * Math.sin(a), CY - r * Math.cos(a)];
+  function annulus(r0, r1, a0, a1) {
+    if (a1 - a0 <= 0.0005 || r1 - r0 <= 0.2) return '';
+    const L = a1 - a0 > Math.PI ? 1 : 0;
+    const [x0, y0] = P(r1, a0), [x1, y1] = P(r1, a1), [x2, y2] = P(r0, a1), [x3, y3] = P(r0, a0);
+    return `M ${x0} ${y0} A ${r1} ${r1} 0 ${L} 1 ${x1} ${y1} L ${x2} ${y2} A ${r0} ${r0} 0 ${L} 0 ${x3} ${y3} Z`;
+  }
+  function arcPath(r, a0, a1) {
+    const [x0, y0] = P(r, a0), [x1, y1] = P(r, a1);
+    return `M ${x0} ${y0} A ${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1} ${y1}`;
+  }
+  const defs = (rows) => `<defs>
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter>
+      <radialGradient id="core"><stop offset="0" stop-color="rgba(57,135,229,.18)"/><stop offset="1" stop-color="rgba(57,135,229,0)"/></radialGradient>
+      ${rows.map((r) => `<radialGradient id="rg${r.i}" cx="${CX}" cy="${CY}" r="260" gradientUnits="userSpaceOnUse">
+        <stop offset=".45" stop-color="${color(r.i)}" stop-opacity=".55"/><stop offset=".75" stop-color="${color(r.i)}"/><stop offset="1" stop-color="${color(r.i)}" stop-opacity=".9"/></radialGradient>`).join('')}
+    </defs>`;
+
+  const fixedIds = () => (view === 'after' ? new Set(afterState().before.rows.filter((r) => r.out).map((r) => r.id)) : new Set());
+
+  // ---------- 樣式 A：流帶雙環 ----------
+  function drawFlow(rows, total, intro, ghostRows) {
+    const GAP = 0.014, TAU = Math.PI * 2 * intro;
+    const tSum = rows.reduce((a, r) => a + r.target, 0) || 1;
+    const R_OUT0 = 248, R_OUT1 = 266, R_IN0 = 150, R_IN1 = 192;
+    const fixed = fixedIds();
+    let g = defs(rows) + `<circle cx="${CX}" cy="${CY}" r="140" fill="url(#core)"/>`;
+    for (let k = 0; k < 20; k++) { const a = (k / 20) * Math.PI * 2, [x0, y0] = P(272, a), [x1, y1] = P(k % 5 ? 276 : 282, a); g += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--grid)" stroke-width="${k % 5 ? 1 : 2}"/>`; }
+    // 平衡前的位置殘影
+    if (ghostRows) {
+      let gc = 0;
+      ghostRows.forEach((r) => { const b0 = (gc / 100) * TAU, b1 = ((gc + r.w) / 100) * TAU; gc += r.w; if (!r.cash) g += `<path class="ghost" d="${annulus(R_IN0 - 6, R_IN1 + 6, b0 + GAP, b1 - GAP)}"/>`; });
+    }
+    let at = 0, ac = 0;
+    rows.forEach((r) => {
+      const a0 = (at / tSum) * TAU, a1 = ((at + r.target) / tSum) * TAU;
+      const b0 = (ac / 100) * TAU, b1 = ((ac + r.w) / 100) * TAU;
+      at += r.target; ac += r.w;
+      const mid = (b0 + b1) / 2, lift = r.id === selected ? 12 : r.id === hover ? 6 : 0;
+      const dx = Math.sin(mid) * lift, dy = -Math.cos(mid) * lift;
+      const hasT = a1 - a0 > 2 * GAP, hasC = b1 - b0 > 2 * GAP;
+      let ribbon = '';
+      if (hasT && hasC) {
+        const [o0x, o0y] = P(R_OUT0 - 2, a0 + GAP), [o1x, o1y] = P(R_OUT0 - 2, a1 - GAP);
+        const [i1x, i1y] = P(R_IN1 + 2, b1 - GAP), [i0x, i0y] = P(R_IN1 + 2, b0 + GAP);
+        const [c1x, c1y] = P(220, a1 - GAP), [c2x, c2y] = P(220, b1 - GAP), [c3x, c3y] = P(220, b0 + GAP), [c4x, c4y] = P(220, a0 + GAP);
+        ribbon = `M ${o0x} ${o0y} A ${R_OUT0 - 2} ${R_OUT0 - 2} 0 0 1 ${o1x} ${o1y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${i1x} ${i1y} A ${R_IN1 + 2} ${R_IN1 + 2} 0 ${b1 - b0 > Math.PI ? 1 : 0} 0 ${i0x} ${i0y} C ${c3x} ${c3y}, ${c4x} ${c4y}, ${o0x} ${o0y} Z`;
+      }
+      const am = hasT ? (a0 + a1) / 2 : mid, [lx, ly] = P(300, am);
+      const anchor = Math.abs(lx - CX) < 20 ? 'middle' : lx > CX ? 'start' : 'end';
+      const [bx, by] = P(171, mid);
+      const isFixed = fixed.has(r.id);
+      g += `<g class="sec${r.id === selected || r.id === hover ? ' on' : ''}${lift ? ' lift' : ''}" data-s="${r.id}" style="--dx:${dx}px;--dy:${dy}px">
+        ${ribbon ? `<path class="ribbon${r.out ? ' bad' : ''}" d="${ribbon}" fill="${r.out ? 'rgba(255,90,95,.55)' : isFixed ? 'rgba(34,197,94,.35)' : color(r.i)}" opacity="${r.out ? '' : isFixed ? 1 : .2}"/>` : ''}
+        ${r.out && hasT && hasC ? `<path class="flow" d="M ${P(R_OUT0 - 6, am).join(' ')} Q ${P(205, (am + mid) / 2).join(' ')} ${P(R_IN1 + 6, mid).join(' ')}" stroke="#ffd0d1" stroke-width="2" fill="none" stroke-linecap="round"/>` : ''}
+        <path d="${annulus(R_OUT0, R_OUT1, a0 + GAP, a1 - GAP)}" fill="${color(r.i)}" opacity=".55"/>
+        ${r.out ? `<path d="${annulus(R_IN0, R_IN1, b0 + GAP, b1 - GAP)}" fill="var(--critical)" filter="url(#soft)" opacity=".7"/>` : ''}
+        <path d="${annulus(R_IN0, R_IN1, b0 + GAP, b1 - GAP)}" fill="${r.cash ? 'url(#rg6)' : `url(#rg${r.i})`}" ${r.id === selected ? 'filter="url(#glow)"' : ''} ${r.cash ? 'stroke="rgba(255,255,255,.35)" stroke-dasharray="3 3"' : ''}/>
+        ${intro > .98 && (!r.cash || r.w > 0.3) ? `<text x="${lx}" y="${ly - 4}" text-anchor="${anchor}" class="lbl-name">${r.cash ? '現金' : r.name}</text>
+        <text x="${lx}" y="${ly + 13}" text-anchor="${anchor}" class="lbl-sub">${r.cash ? '賣出所得 ' + usd(r.value) : `目標 ${r.target}% → ${view === 'after' ? '平衡後' : '目前'} ${r.w.toFixed(1)}%`}</text>` : ''}
+        ${intro > .98 && !r.cash && hasC && b1 - b0 > 0.2 ? `<g class="badge${r.out ? ' bad' : isFixed ? ' fixed' : ''}" transform="translate(${bx},${by})"><rect x="-26" y="-11" width="52" height="22" rx="11"/><text text-anchor="middle" y="4">${isFixed ? '✓ ' : ''}${sgn(r.dev)}</text></g>` : ''}
+      </g>`;
+    });
+    g += centerText(rows, total, 1);
+    return g;
+  }
+
+  // ---------- 樣式 B：玫瑰花瓣 ----------
+  function drawRose(allRows, total, intro, ghostRows) {
+    const rows = allRows.filter((r) => !r.cash);
+    const n = rows.length, R0 = 92, R1 = 262, GAP = 0.03;
+    const M = Math.max(30, Math.ceil((Math.max(...rows.map((r) => Math.max(r.w, r.target + tol)), ...(ghostRows || []).map((r) => r.w)) + 3) / 5) * 5);
+    const rad = (v) => R0 + (Math.max(0, v) / M) * (R1 - R0) * intro;
+    const fixed = fixedIds();
+    let g = defs(allRows) + `<circle cx="${CX}" cy="${CY}" r="${R0 - 6}" fill="url(#core)"/>`;
+    for (let t = 10; t <= M; t += 10) g += `<circle cx="${CX}" cy="${CY}" r="${R0 + (t / M) * (R1 - R0)}" fill="none" stroke="var(--grid)" stroke-dasharray="2 5"/><text x="${CX + 4}" y="${CY - R0 - (t / M) * (R1 - R0) + 12}" class="lbl-sub">${t}%</text>`;
+    rows.forEach((r, k) => {
+      const a0 = (k / n) * Math.PI * 2 + GAP, a1 = ((k + 1) / n) * Math.PI * 2 - GAP, am = (a0 + a1) / 2;
+      const lift = r.id === selected ? 12 : r.id === hover ? 6 : 0, dx = Math.sin(am) * lift, dy = -Math.cos(am) * lift;
+      const [lx, ly] = P(R1 + 26, am), anchor = Math.abs(lx - CX) < 20 ? 'middle' : lx > CX ? 'start' : 'end';
+      const ghost = ghostRows ? ghostRows.find((x) => x.id === r.id) : null;
+      const [bx, by] = P(Math.max(rad(r.w), rad(r.target), ghost ? rad(ghost.w) : 0) + 18, am);
+      const isFixed = fixed.has(r.id);
+      g += `<g class="sec${r.id === selected || r.id === hover ? ' on' : ''}${lift ? ' lift' : ''}" data-s="${r.id}" style="--dx:${dx}px;--dy:${dy}px">
+        <path d="${annulus(R0, R1, a0, a1)}" fill="rgba(255,255,255,.025)"/>
+        <path d="${annulus(rad(Math.max(0, r.target - tol)), rad(r.target + tol), a0, a1)}" fill="rgba(34,197,94,.13)" stroke="rgba(34,197,94,.45)"/>
+        ${r.out ? `<path d="${annulus(R0, rad(r.w), a0, a1)}" fill="var(--critical)" filter="url(#soft)" opacity=".6"/>` : ''}
+        <path d="${annulus(R0, rad(r.w), a0, a1)}" fill="url(#rg${r.i})" ${r.id === selected ? 'filter="url(#glow)"' : ''}/>
+        ${ghost && Math.abs(ghost.w - r.w) > 0.05 ? `<path class="ghost" d="${annulus(R0, rad(ghost.w), a0 + 0.01, a1 - 0.01)}"/>` : ''}
+        <path d="${arcPath(rad(r.target), a0, a1)}" stroke="var(--ink)" stroke-width="2.5" fill="none"/>
+        ${intro > .98 ? `<text x="${lx}" y="${ly - 4}" text-anchor="${anchor}" class="lbl-name">${r.name}</text><text x="${lx}" y="${ly + 13}" text-anchor="${anchor}" class="lbl-sub">${r.w.toFixed(1)}%・目標 ${r.target}%</text>
+        <g class="badge${r.out ? ' bad' : isFixed ? ' fixed' : ''}" transform="translate(${bx},${by})"><rect x="-26" y="-11" width="52" height="22" rx="11"/><text text-anchor="middle" y="4">${isFixed ? '✓ ' : ''}${sgn(r.dev)}</text></g>` : ''}
+      </g>`;
+    });
+    g += centerText(allRows, total, 0.8);
+    return g;
+  }
+
+  function centerText(rows, total, f) {
+    const outs = rows.filter((r) => r.out);
+    const cash = rows.find((r) => r.cash);
+    const sub = view === 'after'
+      ? (outs.length ? outs.length + ' 個板塊仍超出範圍' : '平衡後全部在範圍內')
+      : (outs.length ? outs.length + ' 個板塊超出範圍' : '全部在範圍內');
+    return `<g pointer-events="none">
+      <text x="${CX}" y="${CY - 26 * f}" text-anchor="middle" class="lbl-sub">${view === 'after' ? '平衡後總市值' : '總市值'}</text>
+      <text x="${CX}" y="${CY + 6 * f}" text-anchor="middle" class="center-big" style="font-size:${30 * f}px">${usd(total)}</text>
+      <text x="${CX}" y="${CY + 32 * f}" text-anchor="middle" class="${outs.length ? 'center-bad' : 'center-ok'}" style="font-size:${14 * f}px">${sub}</text>
+      ${view === 'after' && cash && cash.value ? `<text x="${CX}" y="${CY + 52 * f}" text-anchor="middle" class="lbl-sub" style="font-size:${12 * f}px">${cash.value > 0 ? '多出現金 ' : '需補入 '}${usd(cash.value)}</text>` : ''}
+    </g>`;
+  }
+
+  // ---------- 右側面板 ----------
+  function meterHtml(r, afterW) {
+    const lo = Math.max(0, r.target - tol), hi = r.target + tol;
+    const M = Math.max(30, Math.ceil((Math.max(r.w, hi, afterW || 0) + 3) / 5) * 5), x = (v) => (Math.max(0, Math.min(v, M)) / M) * 100;
+    const has = afterW != null && Math.abs(afterW - r.w) > 0.05;
+    return `<div class="meter">
+        <div class="trk"></div>
+        <div class="band" style="left:${x(lo)}%;width:${x(hi) - x(lo)}%"></div>
+        <span class="lab bot" style="left:${x(lo)}%">${lo}%</span><span class="lab bot" style="left:${x(hi)}%">${hi}%</span>
+        <div class="tgt" style="left:${x(r.target)}%"></div><span class="lab top" style="left:${x(r.target)}%">目標 ${r.target}%</span>
+        ${has ? `<div class="arrow" style="left:${Math.min(x(r.w), x(afterW))}%;width:${Math.abs(x(r.w) - x(afterW))}%"></div>` : ''}
+        <div class="dot" style="left:${x(r.w)}%;background:${r.out ? 'var(--critical)' : color(r.i)}" title="平衡前"></div>
+        ${has ? `<div class="dot after" style="left:${x(afterW)}%" title="平衡後"></div>` : ''}
+      </div>`;
+  }
+
+  function renderPanel() {
+    const el = document.getElementById('panel');
+    const A = afterState(), B = A.before;
+    if (view === 'after' && !selected) {
+      const changed = B.rows.filter((r) => !r.cash);
+      el.innerHTML = `<h2>平衡後的樣子</h2>
+        <p class="sub">${A.trades.length ? `照下面 ${A.trades.length} 筆交易，${mode === 'edge' ? '把超出的板塊拉回範圍邊緣' : '把超出的板塊拉回目標'}` : '目前沒有板塊超出範圍，不需要交易'}</p>
+        <div class="ba"><span></span><span class="h">板塊</span><span class="h">平衡前</span><span></span><span class="h">平衡後</span>
+        ${changed.map((r) => { const a = A.rows.find((x) => x.id === r.id); const fixed = r.out && !a.out; return `<i style="background:${color(r.i)}"></i><span>${r.name}</span><span class="${r.out ? 'bad' : ''}">${r.w.toFixed(1)}%</span><span class="arr">→</span><span class="${fixed ? 'fixed' : a.out ? 'bad' : ''}">${a.w.toFixed(1)}%${fixed ? ' ✓' : ''}</span>`; }).join('')}
+        ${A.cash ? `<i style="background:var(--c7)"></i><span>現金</span><span>$0</span><span class="arr">→</span><span>${A.cash > 0 ? '+' : '−'}${usd(A.cash)}</span>` : ''}</div>
+        ${A.trades.length ? `<div class="section-t">交易清單</div><div class="trades">${A.trades.map(tradeHtml).join('')}</div>` : ''}
+        <p class="note">${A.cash > 0 ? '賣出所得先留作現金，總市值不變。' : A.cash < 0 ? '買入需要額外資金 ' + usd(A.cash) + '。' : ''}股數用無條件進位，確保交易後確實回到範圍內。僅供參考，不是投資建議。</p>`;
+      return;
+    }
+    const r = B.rows.find((x) => x.id === selected);
+    if (!r) {
+      el.innerHTML = `<h2>各板塊狀況</h2><p class="sub">點圓環或下面的板塊，看每檔要買賣幾股</p><div class="list">${B.rows.filter((x) => !x.cash).sort((a, b) => Math.abs(b.dev) - Math.abs(a.dev)).map((x) =>
+        `<div class="li" data-s="${x.id}"><i style="background:${color(x.i)}"></i><span>${x.name}</span><span class="r ${x.out ? 'bad' : 'ok'}">${x.out ? sgn(x.dev) + ' 點・要調整' : sgn(x.dev) + ' 點'}</span></div>`).join('')}</div>
+        <button class="btn go" type="button" data-goto="after" style="margin-top:12px;width:100%">看平衡後的樣子</button>`;
+      return;
+    }
+    const s = suggest(r, B.total, mode);
+    // 只交易這個板塊後的權重
+    let afterW = null;
+    if (s.goal != null) {
+      const sold = s.trades.reduce((a, t) => a + (t.side === 'sell' ? -t.value : t.value), 0);
+      afterW = ((r.value + sold) / B.total) * 100;
+    }
+    const side = s.amount < 0 ? 'sell' : 'buy';
+    const head = s.goal == null
+      ? `<div class="call ok"><div class="big">不用動</div><small>目前 ${r.w.toFixed(1)}% 在容忍範圍 ${Math.max(0, r.target - tol)}–${r.target + tol}% 內</small></div>`
+      : `<div class="call ${side}"><div class="big">${side === 'sell' ? '賣出' : '買入'} ${usd(s.trades.reduce((a, t) => a + t.value, 0))}</div><small>平衡前 ${r.w.toFixed(1)}% → 平衡後 ${afterW.toFixed(1)}%（${mode === 'edge' ? (side === 'sell' ? '賣回上限 ' : '買回下限 ') + s.goal + '%' : '回到目標 ' + s.goal + '%'}）</small></div>`;
+    el.innerHTML = `
+      <h2><i style="background:${color(r.i)}"></i>${r.name}</h2>
+      <p class="sub">目前 ${r.w.toFixed(1)}%（${usd(r.value)}）・目標 ${r.target}%・偏離 ${sgn(r.dev)} 點</p>
+      ${meterHtml(r, afterW)}
+      <div class="modes" role="group" aria-label="建議方式">
+        <button type="button" data-mode="edge" aria-pressed="${mode === 'edge'}">${r.dev > 0 ? '賣回上限' : '買回下限'}（最少交易）</button>
+        <button type="button" data-mode="target" aria-pressed="${mode === 'target'}">回到目標</button>
+      </div>
+      ${head}
+      ${s.goal == null ? `<p class="empty">在範圍內就一股都不用動。想看回到目標要怎麼調，可以切換到「回到目標」。</p>` :
+        s.trades.length ? `<div class="trades">${s.trades.map(tradeHtml).join('')}</div>`
+        : `<p class="empty">${holdings.some((h) => h.sector === r.id) ? '金額太小，換算不到 1 股。' : '這個板塊還沒有持股，請先新增想買的標的。'}</p>`}
+      ${s.goal != null ? `<button class="btn go" type="button" data-goto="after" style="margin-top:12px;width:100%">看全部板塊平衡後的樣子</button>` : ''}
+      <p class="note">股數依各檔目前市值比例分配${mode === 'edge' ? '並無條件進位，確保交易後確實回到範圍內' : '並四捨五入'}。僅供參考，不是投資建議。</p>
+      <button class="btn" type="button" data-close style="margin-top:6px;width:100%">看全部板塊</button>`;
+  }
+  function tradeHtml(t) {
+    return `<div class="trade"><b><i style="background:${color(t.i)}"></i>${t.sym}</b><span class="act ${t.side}">${t.side === 'sell' ? '賣' : '買'} ${t.shares.toLocaleString('en-US')} 股</span><small>價格 $${t.price}・持有 ${t.held.toLocaleString('en-US')} 股 → ${(t.held + (t.side === 'sell' ? -t.shares : t.shares)).toLocaleString('en-US')} 股</small><small>約 ${usd(t.value)}</small></div>`;
+  }
+
+  // ---------- 動畫 ----------
+  let shownRows = null, intro = 0, raf = null;
+  function targetState() { return view === 'after' ? afterState() : compute(holdings); }
+  function render() {
+    const T = targetState();
+    const svg = document.getElementById('chart');
+    svg.classList.toggle('dim', !!(selected || hover));
+    const ghost = view === 'after' ? compute(holdings).rows : null;
+    svg.innerHTML = style === 'flow' ? drawFlow(shownRows, T.total, intro, ghost) : drawRose(shownRows, T.total, intro, ghost);
+    const tag = document.getElementById('state-tag');
+    tag.textContent = view === 'after' ? '平衡後（虛線是平衡前的位置）' : '平衡前';
+    tag.className = 'state-tag' + (view === 'after' ? ' after' : '');
+    renderPanel();
+  }
+  function tick() {
+    const { rows } = targetState();
+    let moving = false;
+    intro = Math.min(1, intro + 0.035);
+    if (intro < 1) moving = true;
+    shownRows = rows.map((r, k) => {
+      const prev = shownRows ? shownRows[k] : null;
+      const w0 = prev && prev.id === r.id ? prev.w : (r.cash ? 0 : r.target);
+      const w = Math.abs(r.w - w0) < 0.02 ? r.w : w0 + (r.w - w0) * 0.14;
+      if (w !== r.w) moving = true;
+      if (r.cash) return { ...r, w };
+      const dev = w - r.target;
+      return { ...r, w, dev, out: r1(w) > r.target + tol || r1(w) < r.target - tol, edge: dev > 0 ? r.target + tol : r.target - tol };
+    });
+    render();
+    raf = moving ? requestAnimationFrame(tick) : null;
+  }
+  function kick() { if (!raf) raf = requestAnimationFrame(tick); }
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) intro = 1;
+
+  function setView(v) {
+    view = v;
+    document.querySelectorAll('[data-view]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.view === v)));
+    if (v === 'after') selected = null;
+    kick();
+  }
+
+  document.getElementById('tol').addEventListener('input', (e) => { tol = +e.target.value; document.getElementById('tol-v').textContent = tol; kick(); });
+  document.getElementById('shock').addEventListener('click', () => {
+    holdings = holdings.map((h) => ({ ...h, price: Math.max(1, Math.round(h.price * (0.75 + Math.random() * 0.6) * 100) / 100) }));
+    kick();
+  });
+  document.getElementById('reset').addEventListener('click', () => { holdings = BASE.map((h) => ({ ...h })); kick(); });
+  document.querySelectorAll('[data-style]').forEach((b) => b.addEventListener('click', () => {
+    style = b.dataset.style;
+    document.querySelectorAll('[data-style]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    intro = 0; kick();
+  }));
+  document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+  document.addEventListener('click', (e) => {
+    const m = e.target.closest('[data-mode]');
+    if (m) { mode = m.dataset.mode; kick(); render(); return; }
+    const go = e.target.closest('[data-goto]');
+    if (go) { setView(go.dataset.goto); return; }
+    if (e.target.closest('[data-close]')) { selected = null; render(); return; }
+    const s = e.target.closest('[data-s]');
+    if (s && s.dataset.s !== 'cash') {
+      if (view === 'after') setView('before');
+      selected = selected === s.dataset.s && s.closest('svg') ? null : s.dataset.s;
+      render();
+    }
+  });
+  const chart = document.getElementById('chart');
+  chart.addEventListener('pointerover', (e) => { const s = e.target.closest('[data-s]'); const id = s ? s.dataset.s : null; if (id !== hover) { hover = id; if (!raf) render(); } });
+  chart.addEventListener('pointerleave', () => { hover = null; if (!raf) render(); });
+
+  kick();
+})();
+</script>
+</body>
+</html>

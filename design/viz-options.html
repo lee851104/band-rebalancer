@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>距離目標的視覺化</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #242422; --surface-3: #2e2e2b;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781; --grid: #2c2c2a;
+    --border: rgba(255,255,255,.10);
+    --accent: #3987e5; --good: #0ca30c; --critical: #e5484d;
+    --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c6: #0ca30c;
+    --band: rgba(12,163,12,.12); --band-edge: rgba(12,163,12,.45);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--page); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 16px 64px; }
+  h1 { margin: 0; font-size: 22px; font-weight: 700; }
+  .lead { margin: 6px 0 18px; color: var(--ink-2); }
+  .controls { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 12px 16px; margin: 0 -16px 18px; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  .ctl { display: flex; align-items: center; gap: 10px; color: var(--ink-2); }
+  .ctl b { color: var(--ink); font-variant-numeric: tabular-nums; min-width: 52px; display: inline-block; }
+  input[type=range] { accent-color: var(--accent); width: 160px; }
+  .btn { height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-weight: 600; }
+  .btn:hover { background: var(--surface-2); }
+  .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+  .legend-s { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-left: auto; color: var(--ink-2); font-size: 12.5px; }
+  .legend-s span { display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .legend-s i { width: 10px; height: 10px; border-radius: 50%; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 18px 18px 14px; display: flex; flex-direction: column; }
+  .card h2 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .n { width: 24px; height: 24px; border-radius: 7px; background: var(--surface-2); display: grid; place-items: center; font-size: 12.5px; color: var(--ink-2); }
+  .tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: #9cc5f6; }
+  .card p { margin: 4px 0 10px; color: var(--muted); font-size: 12.5px; }
+  .card .fit { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); color: var(--ink-2); font-size: 12.5px; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; }
+  .card .fit b { color: var(--muted); font-weight: 600; }
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+  svg text { fill: var(--ink-2); font-size: 12px; }
+  svg .t-strong { fill: var(--ink); font-weight: 650; }
+  svg .t-muted { fill: var(--muted); font-size: 11px; }
+  svg .t-bad { fill: #ff8a8a; font-weight: 700; }
+  svg .t-good { fill: #6fd36f; font-weight: 600; }
+  [data-s] { transition: opacity .2s; }
+  .hot [data-s]:not(.is-hot) { opacity: .2; }
+  .gauges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .gauge { text-align: center; padding: 6px 0 2px; border-radius: 12px; }
+  .gauge .nm { font-weight: 650; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .gauge .nm i { width: 8px; height: 8px; border-radius: 50%; }
+  .gauge .st { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .gauge .st.bad { color: #ff8a8a; font-weight: 650; }
+  .pulse { animation: pulse 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes pulse { 0% { opacity: .9; transform: scale(.8); } 100% { opacity: 0; transform: scale(2.2); } }
+  .verdict { display: flex; align-items: center; gap: 10px; padding: 14px 16px; margin-bottom: 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); font-size: 15px; }
+  .verdict .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } .legend-s { margin-left: 0; } }
+  @media (max-width: 480px) { .gauges { grid-template-columns: repeat(2, 1fr); } input[type=range] { width: 120px; } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>「距離目標」的 6 種呈現方式</h1>
+  <p class="lead">同一份範例資料（總值 $250,000），每張圖都在回答「哪個板塊離目標太遠、要調多少」。滑鼠移到任何板塊，6 張圖會一起標出它。</p>
+
+  <div class="controls">
+    <label class="ctl">容忍範圍 ±<b id="tol-v">5 點</b><input type="range" id="tol" min="2" max="10" step="0.5" value="5"></label>
+    <button class="btn primary" id="shock">模擬一次市場波動</button>
+    <button class="btn" id="reset">回到範例</button>
+    <div class="legend-s" id="legend"></div>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+
+  <div class="grid">
+    <section class="card">
+      <h2><span class="n">1</span>偏離長條<span class="tag">推薦</span></h2>
+      <p>中間的線就是目標，長條往右代表太多、往左代表不夠；綠色區域是容忍範圍，超出就變紅。</p>
+      <svg id="v1" viewBox="0 0 540 330"></svg>
+      <div class="fit"><b>好處</b><span>直接畫「差多少」，最好懂；一眼就知道誰超出、往哪邊</span><b>缺點</b><span>看不到每個板塊實際佔多少</span></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">2</span>子彈圖</h2>
+      <p>長條是目前比例，黑線是目標，淡綠框是容忍範圍；長條尾端超出綠框就要調整。</p>
+      <svg id="v2" viewBox="0 0 540 330"></svg>
+      <div class="fit"><b>好處</b><span>同時看到實際比例與目標，最接近目前網站的邏輯</span><b>缺點</b><span>「差多少」要自己目測</span></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">3</span>儀表板</h2>
+      <p>每個板塊一個儀表，指針指向偏離目標多少；綠區是容忍範圍，指到紅區就要調整。</p>
+      <div class="gauges" id="v3"></div>
+      <div class="fit"><b>好處</b><span>像汽車儀表一樣直覺，手機上很好看</span><b>缺點</b><span>板塊多時佔空間</span></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">4</span>雙層圓環</h2>
+      <p>外圈是目標配置，內圈是目前配置；兩圈同色的弧長不一樣，就代表跑掉了。</p>
+      <svg id="v4" viewBox="0 0 540 300"></svg>
+      <div class="fit"><b>好處</b><span>最有「整體配置」的感覺，視覺上最漂亮</span><b>缺點</b><span>小差距不容易看出來</span></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">5</span>配置流向</h2>
+      <p>上面是目標、下面是目前，中間的彩帶把同一個板塊連起來；彩帶變寬或變窄就是比例變了。</p>
+      <svg id="v5" viewBox="0 0 540 260"></svg>
+      <div class="fit"><b>好處</b><span>很有設計感，能看出錢「流」到哪裡</span><b>缺點</b><span>精確數字要看標籤</span></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">6</span>雷達圖</h2>
+      <p>虛線是目標形狀，彩色是目前形狀，綠色環帶是容忍範圍；跑出環帶的角就是要調整的板塊。</p>
+      <svg id="v6" viewBox="0 0 540 320"></svg>
+      <div class="fit"><b>好處</b><span>一個形狀看出整體是否「歪掉」</span><b>缺點</b><span>板塊少於 4 個時不好看</span></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const TOTAL = 250000;
+  const SECTORS = [
+    { id: 'rocket', name: '火箭', target: 15 },
+    { id: 'optics', name: '光', target: 15 },
+    { id: 'software', name: '軟體', target: 20 },
+    { id: 'ev', name: '電動車', target: 15 },
+    { id: 'health', name: '醫療', target: 15 },
+    { id: 'semis', name: '半導體', target: 20 },
+  ];
+  const SAMPLE = [17.2, 13.0, 18.4, 11.6, 13.4, 26.4];
+  const color = (i) => `var(--c${i + 1})`;
+  const usd = (n) => '$' + Math.round(Math.abs(n)).toLocaleString('en-US');
+  const sgn = (v) => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v).toFixed(1);
+  let tol = 5;
+  let shown = SAMPLE.slice();   // 畫面上的值（動畫中）
+  let goal = SAMPLE.slice();    // 動畫目標值
+  let hot = null;
+
+  function rows() {
+    return SECTORS.map((s, i) => {
+      const w = shown[i], dev = w - s.target;
+      const out = Math.abs(dev) > tol;
+      const edge = dev > 0 ? s.target + tol : s.target - tol;
+      const amt = out ? ((edge - w) / 100) * TOTAL : 0;
+      return { ...s, i, w, dev, out, amt };
+    });
+  }
+  const act = (r) => (r.amt < 0 ? '賣 ' : '買 ') + usd(r.amt);
+
+  // ---------- 1. 偏離長條 ----------
+  function v1(R) {
+    const L = 96, Rr = 410, x0 = (L + Rr) / 2, M = Math.max(10, Math.ceil(Math.max(...R.map((r) => Math.abs(r.dev))) + 2));
+    const s = (Rr - L) / 2 / M, top = 40, rh = 44;
+    let g = `<text x="${L}" y="20" class="t-muted">← 不夠</text><text x="${Rr}" y="20" text-anchor="end" class="t-muted">太多 →</text>`;
+    g += `<rect x="${x0 - tol * s}" y="${top - 8}" width="${tol * 2 * s}" height="${R.length * rh}" rx="8" fill="var(--band)" stroke="var(--band-edge)" stroke-dasharray="4 4"/>`;
+    g += `<line x1="${x0}" x2="${x0}" y1="${top - 14}" y2="${top + R.length * rh}" stroke="var(--ink)" stroke-width="2"/>`;
+    g += `<text x="${x0}" y="${top + R.length * rh + 18}" text-anchor="middle" class="t-strong">目標</text>`;
+    g += `<text x="${x0 - tol * s}" y="${top + R.length * rh + 18}" text-anchor="middle" class="t-muted">−${tol}</text><text x="${x0 + tol * s}" y="${top + R.length * rh + 18}" text-anchor="middle" class="t-muted">+${tol}</text>`;
+    R.forEach((r, k) => {
+      const y = top + k * rh + rh / 2 - 8;
+      const x = r.dev >= 0 ? x0 : x0 + r.dev * s, w = Math.max(2, Math.abs(r.dev) * s);
+      const c = r.out ? 'var(--critical)' : color(r.i);
+      g += `<g data-s="${r.id}">
+        <circle cx="14" cy="${y + 8}" r="5" fill="${color(r.i)}"/><text x="26" y="${y + 12}" class="t-strong">${r.name}</text>
+        <rect x="${x}" y="${y}" width="${w}" height="16" rx="5" fill="${c}" opacity="${r.out ? 1 : .85}"/>
+        ${r.out ? `<circle cx="${x0 + r.dev * s}" cy="${y + 8}" r="7" fill="none" stroke="var(--critical)" stroke-width="2" class="pulse"/>` : ''}
+        <text x="${r.dev >= 0 ? x + w + 6 : x - 6}" y="${y + 12}" text-anchor="${r.dev >= 0 ? 'start' : 'end'}" class="${r.out ? 't-bad' : ''}" style="font-variant-numeric:tabular-nums">${sgn(r.dev)}</text>
+        <text x="${Rr + 16}" y="${y + 12}" class="${r.out ? 't-bad' : 't-good'}">${r.out ? act(r) : '✓ 不用動'}</text>
+      </g>`;
+    });
+    return g;
+  }
+
+  // ---------- 2. 子彈圖 ----------
+  function v2(R) {
+    const L = 96, Rr = 410, M = Math.ceil((Math.max(...R.map((r) => Math.max(r.w, r.target + tol))) + 3) / 5) * 5;
+    const s = (Rr - L) / M, top = 30, rh = 46;
+    let g = '';
+    for (let t = 0; t <= M; t += 5) g += `<line x1="${L + t * s}" x2="${L + t * s}" y1="${top - 6}" y2="${top + R.length * rh}" stroke="var(--grid)"/><text x="${L + t * s}" y="${top + R.length * rh + 16}" text-anchor="middle" class="t-muted">${t}%</text>`;
+    R.forEach((r, k) => {
+      const y = top + k * rh + rh / 2;
+      g += `<g data-s="${r.id}">
+        <circle cx="14" cy="${y}" r="5" fill="${color(r.i)}"/><text x="26" y="${y + 4}" class="t-strong">${r.name}</text>
+        <rect x="${L + Math.max(0, r.target - tol) * s}" y="${y - 13}" width="${tol * 2 * s}" height="26" rx="6" fill="var(--band)" stroke="var(--band-edge)"/>
+        <rect x="${L}" y="${y - 6}" width="${r.w * s}" height="12" rx="4" fill="${color(r.i)}"/>
+        ${r.out ? `<rect x="${L + r.w * s - 3}" y="${y - 9}" width="6" height="18" rx="3" fill="var(--critical)"/>` : ''}
+        <line x1="${L + r.target * s}" x2="${L + r.target * s}" y1="${y - 16}" y2="${y + 16}" stroke="var(--ink)" stroke-width="2.5"/>
+        <text x="${Rr + 16}" y="${y}" class="t-strong" style="font-variant-numeric:tabular-nums">${r.w.toFixed(1)}%</text>
+        <text x="${Rr + 16}" y="${y + 15}" class="${r.out ? 't-bad' : 't-muted'}">${r.out ? act(r) : '目標 ' + r.target + '%'}</text>
+      </g>`;
+    });
+    return g;
+  }
+
+  // ---------- 3. 儀表板 ----------
+  function arc(cx, cy, r, a0, a1) {
+    const p = (a) => [cx + r * Math.sin(a), cy - r * Math.cos(a)];
+    const [x0, y0] = p(a0), [x1, y1] = p(a1);
+    return `M ${x0} ${y0} A ${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1} ${y1}`;
+  }
+  function v3(R) {
+    const RANGE = 15, A = (d) => (Math.max(-RANGE, Math.min(RANGE, d)) / RANGE) * (Math.PI / 2);
+    return R.map((r) => {
+      const cx = 80, cy = 78, rad = 58;
+      const zones = `<path d="${arc(cx, cy, rad, A(-RANGE), A(-tol))}" stroke="rgba(229,72,77,.55)" stroke-width="12" fill="none"/>
+        <path d="${arc(cx, cy, rad, A(-tol), A(tol))}" stroke="rgba(12,163,12,.75)" stroke-width="12" fill="none"/>
+        <path d="${arc(cx, cy, rad, A(tol), A(RANGE))}" stroke="rgba(229,72,77,.55)" stroke-width="12" fill="none"/>`;
+      const a = A(r.dev), nx = cx + (rad - 16) * Math.sin(a), ny = cy - (rad - 16) * Math.cos(a);
+      return `<div class="gauge" data-s="${r.id}"><svg viewBox="0 0 160 100">
+          ${zones}
+          <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="${cx}" cy="${cy}" r="6" fill="var(--ink)"/>
+          <text x="${cx}" y="${cy + 18}" text-anchor="middle" class="${r.out ? 't-bad' : 't-strong'}" style="font-size:14px;font-variant-numeric:tabular-nums">${sgn(r.dev)} 點</text>
+          <text x="14" y="${cy + 6}" class="t-muted">不夠</text><text x="146" y="${cy + 6}" text-anchor="end" class="t-muted">太多</text>
+        </svg>
+        <div class="nm"><i style="background:${color(r.i)}"></i>${r.name}</div>
+        <div class="st ${r.out ? 'bad' : ''}">${r.out ? act(r) : r.w.toFixed(1) + '%・目標 ' + r.target + '%'}</div></div>`;
+    }).join('');
+  }
+
+  // ---------- 4. 雙層圓環 ----------
+  function ring(cx, cy, r, sw, vals, cls) {
+    const C = 2 * Math.PI * r, sum = vals.reduce((a, b) => a + b, 0) || 1;
+    let acc = 0, g = '';
+    vals.forEach((v, i) => {
+      const f = v / sum, len = Math.max(0, f * C - 2.5);
+      g += `<circle data-s="${SECTORS[i].id}" cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color(i)}" stroke-width="${sw}" stroke-dasharray="${len} ${C}" stroke-dashoffset="${-acc * C}" transform="rotate(-90 ${cx} ${cy})" class="${cls}"/>`;
+      acc += f;
+    });
+    return g;
+  }
+  function v4(R) {
+    const cx = 150, cy = 150;
+    let g = ring(cx, cy, 118, 22, SECTORS.map((s) => s.target), '') + ring(cx, cy, 86, 30, R.map((r) => r.w), '');
+    g += `<text x="${cx}" y="${cy - 10}" text-anchor="middle" class="t-muted">外圈 目標</text><text x="${cx}" y="${cy + 8}" text-anchor="middle" class="t-muted">內圈 目前</text>`;
+    const worst = R.slice().sort((a, b) => Math.abs(b.dev) - Math.abs(a.dev))[0];
+    g += `<text x="${cx}" y="${cy + 30}" text-anchor="middle" class="${worst.out ? 't-bad' : 't-strong'}">${worst.name} ${sgn(worst.dev)}</text>`;
+    R.forEach((r, k) => {
+      const y = 50 + k * 36;
+      g += `<g data-s="${r.id}"><circle cx="330" cy="${y}" r="6" fill="${color(r.i)}"/>
+        <text x="344" y="${y + 4}" class="t-strong">${r.name}</text>
+        <text x="420" y="${y + 4}" style="font-variant-numeric:tabular-nums">${r.target}% → ${r.w.toFixed(1)}%</text>
+        <text x="420" y="${y + 19}" class="${r.out ? 't-bad' : 't-muted'}">${r.out ? act(r) : sgn(r.dev) + ' 點'}</text></g>`;
+    });
+    return g;
+  }
+
+  // ---------- 5. 配置流向 ----------
+  function v5(R) {
+    const L = 16, W = 508, yT = 36, yB = 186, h = 30;
+    const tSum = SECTORS.reduce((a, s) => a + s.target, 0), cSum = R.reduce((a, r) => a + r.w, 0);
+    let at = 0, ac = 0, g = `<text x="${L}" y="${yT - 10}" class="t-muted">目標</text><text x="${L}" y="${yB + h + 18}" class="t-muted">目前</text>`;
+    R.forEach((r) => {
+      const t0 = L + (at / tSum) * W, t1 = L + ((at + r.target) / tSum) * W;
+      const c0 = L + (ac / cSum) * W, c1 = L + ((ac + r.w) / cSum) * W;
+      const yt = yT + h, yb = yB, my = (yt + yb) / 2;
+      g += `<g data-s="${r.id}">
+        <path d="M ${t0 + 1} ${yt} C ${t0 + 1} ${my}, ${c0 + 1} ${my}, ${c0 + 1} ${yb} L ${c1 - 1} ${yb} C ${c1 - 1} ${my}, ${t1 - 1} ${my}, ${t1 - 1} ${yt} Z" fill="${color(r.i)}" opacity="${r.out ? .55 : .28}" ${r.out ? 'stroke="var(--critical)" stroke-width="2"' : ''}/>
+        <rect x="${t0 + 1}" y="${yT}" width="${Math.max(0, t1 - t0 - 2)}" height="${h}" rx="5" fill="${color(r.i)}"/>
+        <rect x="${c0 + 1}" y="${yB}" width="${Math.max(0, c1 - c0 - 2)}" height="${h}" rx="5" fill="${color(r.i)}"/>
+        ${t1 - t0 > 46 ? `<text x="${(t0 + t1) / 2}" y="${yT + 19}" text-anchor="middle" style="fill:#fff;font-weight:650">${r.name}</text>` : ''}
+        ${c1 - c0 > 40 ? `<text x="${(c0 + c1) / 2}" y="${yB + 19}" text-anchor="middle" style="fill:#fff;font-weight:650;font-variant-numeric:tabular-nums">${r.w.toFixed(1)}%</text>` : ''}
+        ${r.out ? `<text x="${(c0 + c1) / 2}" y="${my + 4}" text-anchor="middle" class="t-bad">${r.name} ${sgn(r.dev)}・${act(r)}</text>` : ''}
+      </g>`;
+      at += r.target; ac += r.w;
+    });
+    return g;
+  }
+
+  // ---------- 6. 雷達圖 ----------
+  function v6(R) {
+    const cx = 170, cy = 160, rad = 120, M = Math.max(30, Math.ceil((Math.max(...R.map((r) => Math.max(r.w, r.target + tol))) + 2) / 5) * 5);
+    const n = R.length, ang = (k) => -Math.PI / 2 + (k / n) * Math.PI * 2;
+    const pt = (k, v) => [cx + (Math.max(0, v) / M) * rad * Math.cos(ang(k)), cy + (Math.max(0, v) / M) * rad * Math.sin(ang(k))];
+    const poly = (vals) => vals.map((v, k) => pt(k, v).join(',')).join(' ');
+    let g = '';
+    for (let t = 10; t <= M; t += 10) g += `<polygon points="${poly(R.map(() => t))}" fill="none" stroke="var(--grid)"/><text x="${cx + 4}" y="${cy - (t / M) * rad + 12}" class="t-muted">${t}%</text>`;
+    R.forEach((r, k) => { const [x, y] = pt(k, M); g += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--grid)"/>`; });
+    const outer = poly(SECTORS.map((s) => s.target + tol)), inner = poly(SECTORS.map((s) => s.target - tol));
+    g += `<path d="M ${outer} Z M ${inner} Z" fill="var(--band)" fill-rule="evenodd" stroke="var(--band-edge)"/>`;
+    g += `<polygon points="${poly(SECTORS.map((s) => s.target))}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-dasharray="5 4"/>`;
+    g += `<polygon points="${poly(R.map((r) => r.w))}" fill="rgba(57,135,229,.22)" stroke="var(--accent)" stroke-width="2.5"/>`;
+    R.forEach((r, k) => {
+      const [x, y] = pt(k, r.w), [lx, ly] = pt(k, M + 7);
+      g += `<g data-s="${r.id}">
+        ${r.out ? `<circle cx="${x}" cy="${y}" r="8" fill="none" stroke="var(--critical)" stroke-width="2" class="pulse"/>` : ''}
+        <circle cx="${x}" cy="${y}" r="5.5" fill="${r.out ? 'var(--critical)' : color(r.i)}" stroke="var(--surface)" stroke-width="2"/>
+        <text x="${lx}" y="${ly}" text-anchor="${Math.abs(lx - cx) < 8 ? 'middle' : lx > cx ? 'start' : 'end'}" class="${r.out ? 't-bad' : 't-strong'}">${r.name} ${r.w.toFixed(0)}%</text>
+      </g>`;
+    });
+    g += `<g transform="translate(360,70)">
+      <line x1="0" x2="22" y1="0" y2="0" stroke="var(--ink)" stroke-width="2" stroke-dasharray="5 4"/><text x="30" y="4">目標</text>
+      <line x1="0" x2="22" y1="24" y2="24" stroke="var(--accent)" stroke-width="2.5"/><text x="30" y="28">目前</text>
+      <rect x="0" y="40" width="22" height="12" rx="3" fill="var(--band)" stroke="var(--band-edge)"/><text x="30" y="51">容忍範圍</text>
+      ${R.filter((r) => r.out).map((r, k) => `<text x="0" y="${86 + k * 18}" class="t-bad">${r.name}：${act(r)}</text>`).join('')}
+    </g>`;
+    return g;
+  }
+
+  // ---------- 畫面 ----------
+  function render() {
+    const R = rows();
+    document.getElementById('v1').setAttribute('viewBox', `0 0 540 ${40 + R.length * 44 + 26}`);
+    document.getElementById('v1').innerHTML = v1(R);
+    document.getElementById('v2').innerHTML = v2(R);
+    document.getElementById('v3').innerHTML = v3(R);
+    document.getElementById('v4').innerHTML = v4(R);
+    document.getElementById('v5').innerHTML = v5(R);
+    document.getElementById('v6').innerHTML = v6(R);
+    const outs = R.filter((r) => r.out);
+    document.getElementById('verdict').innerHTML = outs.length
+      ? `<span class="dot" style="background:var(--critical)"></span><span><b>${outs.map((r) => `${r.name}${r.dev > 0 ? '太多' : '不夠'}，${act(r)}`).join('；')}</b>，其他板塊都在容忍範圍內。</span>`
+      : `<span class="dot" style="background:var(--good)"></span><span><b>全部在容忍範圍內</b>，這次一股都不用動。</span>`;
+    applyHot();
+  }
+  function applyHot() {
+    document.body.classList.toggle('hot', !!hot);
+    document.querySelectorAll('[data-s]').forEach((el) => el.classList.toggle('is-hot', el.dataset.s === hot));
+  }
+
+  // 數值動畫
+  let anim = null;
+  function animateTo(next) {
+    const from = shown.slice(), t0 = performance.now(), dur = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 750;
+    goal = next;
+    cancelAnimationFrame(anim);
+    const step = (t) => {
+      // 第一幀的時間戳記可能早於 t0，進度要夾在 0–1 之間，否則比例會短暫變成負數
+      const p = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - p, 3);
+      shown = from.map((v, i) => v + (goal[i] - v) * e);
+      render();
+      if (p < 1) anim = requestAnimationFrame(step);
+    };
+    anim = requestAnimationFrame(step);
+  }
+
+  document.getElementById('tol').addEventListener('input', (e) => {
+    tol = +e.target.value;
+    document.getElementById('tol-v').textContent = tol + ' 點';
+    render();
+  });
+  document.getElementById('shock').addEventListener('click', () => {
+    // 每個板塊隨機漲跌 −25%～+35%，再換算成比例
+    const v = goal.map((w) => w * (0.75 + Math.random() * 0.6));
+    const sum = v.reduce((a, b) => a + b, 0);
+    animateTo(v.map((x) => (x / sum) * 100));
+  });
+  document.getElementById('reset').addEventListener('click', () => animateTo(SAMPLE.slice()));
+  document.addEventListener('pointerover', (e) => {
+    const el = e.target.closest && e.target.closest('[data-s]');
+    const id = el ? el.dataset.s : null;
+    if (id !== hot) { hot = id; applyHot(); }
+  });
+  document.getElementById('legend').innerHTML = SECTORS.map((s, i) => `<span data-s="${s.id}"><i style="background:${color(i)}"></i>${s.name}</span>`).join('');
+
+  // 開場：從目標位置動到目前位置
+  shown = SECTORS.map((s) => s.target);
+  render();
+  setTimeout(() => animateTo(SAMPLE.slice()), 250);
+})();
+</script>
+</body>
+</html>

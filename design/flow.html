@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的倉位</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #0b0b0c; --surface: #161617; --surface-2: #202022; --surface-3: #2a2a2d;
+    --ink: #f2f1ee; --ink-2: #bdbcb4; --muted: #86857f; --line: rgba(255,255,255,.08);
+    --good: #34c759; --bad: #ff5a5f; --buy: #6fb1ff; --accent: #3987e5;
+    --c1: #3987e5; --c2: #f07a45; --c3: #1fb784; --c4: #e2a321; --c5: #e0679a; --c6: #8bd346; --c7: #6b6a70;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; -webkit-font-smoothing: antialiased;
+    background: radial-gradient(1000px 500px at 50% -10%, rgba(57,135,229,.14), transparent 70%), var(--page);
+    min-height: 100vh;
+  }
+  button { font: inherit; color: inherit; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 28px 18px 64px; }
+
+  /* 結論 */
+  .say h1 { margin: 0; font-size: 26px; font-weight: 750; letter-spacing: -.01em; }
+  .say h1 .bad { color: var(--bad); }
+  .say h1 .ok { color: var(--good); }
+  .say p { margin: 6px 0 0; color: var(--ink-2); font-size: 16px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 18px; }
+  .chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 8px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  .chip b { color: var(--ink); font-size: 16px; font-variant-numeric: tabular-nums; }
+  .chip.bad b { color: var(--bad); }
+  .chip.good b { color: var(--good); }
+
+  /* 流向圖 */
+  .hero { background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.01)); border: 1px solid var(--line); border-radius: 22px; padding: 18px 18px 14px; }
+  .hero-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .hero-top h2 { margin: 0; font-size: 15px; color: var(--ink-2); font-weight: 600; }
+  .toggle { height: 38px; padding: 0 18px; border-radius: 999px; border: 0; background: var(--surface-3); color: var(--ink); font-weight: 650; cursor: pointer; transition: background .2s, transform .15s; white-space: nowrap; }
+  .toggle:hover { background: #36363a; }
+  .toggle:active { transform: scale(.97); }
+  .toggle.on { background: var(--good); color: #06240f; }
+  .toggle:disabled { opacity: .5; cursor: default; }
+  #flow { width: 100%; height: auto; display: block; overflow: visible; }
+  #flow text { font-variant-numeric: tabular-nums; }
+  .seg-name { fill: #fff; font-weight: 700; font-size: 14px; }
+  .seg-pct { fill: rgba(255,255,255,.85); font-size: 12px; font-weight: 600; }
+  .row-lbl { fill: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; }
+  .ribbon { transition: opacity .25s; }
+  .flowing { stroke-dasharray: 3 12; animation: run 1.1s linear infinite; }
+  @keyframes run { to { stroke-dashoffset: -30; } }
+  .pulse { animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  .dimmed .fx:not(.on) { opacity: .25; }
+  .fx { cursor: pointer; transition: opacity .25s; }
+  .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 18px; height: 8px; border-radius: 3px; }
+
+  /* 板塊卡片 */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 14px 12px; cursor: pointer; transition: border-color .2s, transform .2s, background .2s; position: relative; overflow: hidden; }
+  .card:hover { border-color: rgba(255,255,255,.18); transform: translateY(-1px); }
+  .card.on { border-color: rgba(255,255,255,.28); background: var(--surface-2); }
+  .card.out { border-color: rgba(255,90,95,.45); background: linear-gradient(180deg, rgba(255,90,95,.10), rgba(255,90,95,0) 60%), var(--surface); }
+  .card.fixed { border-color: rgba(52,199,89,.45); }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--col); }
+  .card .hd { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .card .nm { font-weight: 700; font-size: 16px; }
+  .card .st { font-weight: 700; font-size: 13px; white-space: nowrap; }
+  .card .st.ok { color: var(--good); }
+  .card .st.sell { color: var(--bad); }
+  .card .st.buy { color: var(--buy); }
+  .card .nums { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 6px; }
+  .card .nums b { font-size: 26px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .card .nums span { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .mini { position: relative; height: 22px; margin: 4px 0 2px; }
+  .mini .tr { position: absolute; left: 0; right: 0; top: 10px; height: 2px; background: rgba(255,255,255,.08); border-radius: 1px; }
+  .mini .band { position: absolute; top: 5px; height: 12px; border-radius: 4px; background: rgba(52,199,89,.16); border: 1px solid rgba(52,199,89,.45); }
+  .mini .tg { position: absolute; top: 2px; width: 2px; height: 18px; margin-left: -1px; background: var(--ink); border-radius: 1px; }
+  .mini .dot { position: absolute; top: 4px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; border: 2px solid var(--surface); transition: left .8s cubic-bezier(.2,.8,.2,1); }
+  .mini .ghost { position: absolute; top: 5px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; border: 2px dashed var(--muted); }
+  .card .scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .how { display: none; margin-top: 10px; }
+  .card.on .how { display: block; }
+  .how .t { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--surface-3); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .how .t b { font-size: 14px; }
+  .how .t .sell { color: var(--bad); font-weight: 750; }
+  .how .t .buy { color: var(--buy); font-weight: 750; }
+  .how .t small { color: var(--muted); }
+  .how p { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-2); }
+  .how p.calm { color: var(--muted); }
+  .foot { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 18px; }
+
+  @media (max-width: 760px) { .cards { grid-template-columns: 1fr 1fr; } .say h1 { font-size: 22px; } }
+  @media (max-width: 480px) { .cards { grid-template-columns: 1fr; } .hero { padding: 14px 10px 10px; } .hero-top h2 { font-size: 13px; } }
+  @media (prefers-reduced-motion: reduce) { .flowing, .pulse { animation: none; } .mini .dot { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="say" id="say"></div>
+  <div class="chips" id="chips"></div>
+
+  <section class="hero">
+    <div class="hero-top">
+      <h2 id="hero-title">目標配置 → 目前配置</h2>
+      <button class="toggle" id="toggle" type="button">看調整後 ▸</button>
+    </div>
+    <svg id="flow" viewBox="0 0 880 330" role="img" aria-label="目標配置與目前配置的流向圖"></svg>
+    <div class="legend">
+      <span><i style="background:rgba(255,255,255,.25)"></i>彩帶：同一個板塊從目標到目前</span>
+      <span><i style="background:var(--bad)"></i>紅色：超出目標 ±5 點，需要調整</span>
+    </div>
+  </section>
+
+  <div class="cards" id="cards"></div>
+  <p class="foot">比目標多或少超過 5 個百分點才需要調整・股數依各檔目前比例分配・範例資料，僅供參考</p>
+</div>
+
+<script>
+(() => {
+  const TOL = 5;
+  const SECTORS = [
+    { id: 'rocket', name: '火箭', target: 15 },
+    { id: 'optics', name: '光', target: 15 },
+    { id: 'software', name: '軟體', target: 20 },
+    { id: 'ev', name: '電動車', target: 15 },
+    { id: 'health', name: '醫療', target: 15 },
+    { id: 'semis', name: '半導體', target: 20 },
+  ];
+  const HOLDINGS = [
+    ['RKLB', 'rocket', 1000, 25], ['LUNR', 'rocket', 1500, 12],
+    ['COHR', 'optics', 250, 90], ['LITE', 'optics', 125, 80],
+    ['MSFT', 'software', 50, 480], ['CRM', 'software', 80, 275],
+    ['TSLA', 'ev', 50, 440], ['RIVN', 'ev', 500, 14],
+    ['LLY', 'health', 30, 800], ['ISRG', 'health', 19, 500],
+    ['NVDA', 'semis', 200, 185], ['TSM', 'semis', 70, 260], ['AMD', 'semis', 50, 216],
+  ].map(([sym, sector, shares, price]) => ({ sym, sector, shares, price }));
+  const color = (i) => `var(--c${i + 1})`;
+  const usd = (n) => '$' + Math.round(Math.abs(n)).toLocaleString('en-US');
+  const one = (v) => (Math.round(v * 10) / 10).toFixed(1);
+  const sgn = (v) => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v).toFixed(1);
+  let after = false, openId = 'semis', hot = null;
+
+  function weights(hs, cash) {
+    const v = {}; let total = cash || 0;
+    hs.forEach((h) => { v[h.sector] = (v[h.sector] || 0) + h.shares * h.price; total += h.shares * h.price; });
+    return { total, rows: SECTORS.map((s, i) => ({ ...s, i, value: v[s.id] || 0, w: total ? ((v[s.id] || 0) / total) * 100 : 0 })) };
+  }
+  // 超出範圍：賣回上限（或買回下限），依各檔比例分配，無條件進位成整數股
+  function plan(row, total) {
+    const hi = row.target + TOL, lo = Math.max(0, row.target - TOL), w = Math.round(row.w * 10) / 10;
+    if (w <= hi && w >= lo) return null;
+    const goal = w > hi ? hi : lo, amount = ((goal - row.w) / 100) * total;
+    const list = HOLDINGS.filter((h) => h.sector === row.id);
+    const sum = list.reduce((a, h) => a + h.shares * h.price, 0) || 1;
+    const trades = list.map((h) => {
+      let n = Math.ceil(Math.abs(amount * (h.shares * h.price) / sum) / h.price - 1e-9);
+      if (amount < 0) n = Math.min(n, h.shares);
+      return { sym: h.sym, n, price: h.price, held: h.shares, side: amount < 0 ? 'sell' : 'buy', value: n * h.price };
+    }).filter((t) => t.n > 0);
+    const value = trades.reduce((a, t) => a + t.value, 0);
+    return { side: amount < 0 ? 'sell' : 'buy', goal, trades, value, afterW: row.w + (amount < 0 ? -1 : 1) * (value / total) * 100 };
+  }
+  function model() {
+    const B = weights(HOLDINGS);
+    const plans = Object.fromEntries(B.rows.map((r) => [r.id, plan(r, B.total)]));
+    const hs = HOLDINGS.map((h) => ({ ...h }));
+    let cash = 0;
+    Object.values(plans).forEach((p) => p && p.trades.forEach((t) => {
+      const h = hs.find((x) => x.sym === t.sym);
+      h.shares += t.side === 'sell' ? -t.n : t.n;
+      cash += t.side === 'sell' ? t.value : -t.value;
+    }));
+    const A = weights(hs, cash);
+    return { B, A, plans, cash };
+  }
+
+  // ---------- 流向圖 ----------
+  const W = 880, X0 = 70, X1 = W - 10, BAR = 46, YT = 28, YB = 248;
+  let shown = null; // 下排目前顯示的比例（動畫用）
+  function drawFlow(M, bottom, cashW) {
+    const span = X1 - X0, gap = 3;
+    const tSum = SECTORS.reduce((a, s) => a + s.target, 0);
+    const bSum = bottom.reduce((a, b) => a + b, 0) + cashW;
+    let g = `<defs>
+      <filter id="glow" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      ${SECTORS.map((s, i) => `<linearGradient id="rb${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color(i)}" stop-opacity=".55"/><stop offset="1" stop-color="${color(i)}" stop-opacity=".22"/></linearGradient>`).join('')}
+      <linearGradient id="rbBad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5a5f" stop-opacity=".75"/><stop offset="1" stop-color="#ff5a5f" stop-opacity=".35"/></linearGradient>
+      <linearGradient id="rbFix" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34c759" stop-opacity=".55"/><stop offset="1" stop-color="#34c759" stop-opacity=".25"/></linearGradient>
+    </defs>`;
+    g += `<text x="0" y="${YT + BAR / 2 + 5}" class="row-lbl">目標</text><text x="0" y="${YB + BAR / 2 + 5}" class="row-lbl">${after ? '調整後' : '目前'}</text>`;
+    let at = 0, ab = 0;
+    const labels = [];
+    SECTORS.forEach((s, i) => {
+      const t0 = X0 + (at / tSum) * span, t1 = X0 + ((at + s.target) / tSum) * span;
+      const b0 = X0 + (ab / bSum) * span, b1 = X0 + ((ab + bottom[i]) / bSum) * span;
+      at += s.target; ab += bottom[i];
+      const w = bottom[i], dev = w - s.target;
+      const out = Math.abs(Math.round(w * 10) / 10 - s.target) > TOL;
+      const fixed = after && M.plans[s.id];
+      const yt = YT + BAR, yb = YB, my = (yt + yb) / 2;
+      const ribbon = `M ${t0 + gap / 2} ${yt} C ${t0 + gap / 2} ${my}, ${b0 + gap / 2} ${my}, ${b0 + gap / 2} ${yb} L ${b1 - gap / 2} ${yb} C ${b1 - gap / 2} ${my}, ${t1 - gap / 2} ${my}, ${t1 - gap / 2} ${yt} Z`;
+      const cxT = (t0 + t1) / 2, cxB = (b0 + b1) / 2;
+      g += `<g class="fx${hot === s.id || openId === s.id ? ' on' : ''}" data-s="${s.id}">
+        <path class="ribbon${out ? ' pulse' : ''}" d="${ribbon}" fill="url(#${out ? 'rbBad' : fixed ? 'rbFix' : 'rb' + i})" ${out ? 'filter="url(#glow)"' : ''}/>
+        ${out ? `<path class="flowing" d="M ${cxT} ${yt + 4} C ${cxT} ${my}, ${cxB} ${my}, ${cxB} ${yb - 4}" stroke="#ffd2d3" stroke-width="2.5" fill="none" stroke-linecap="round"/>` : ''}
+        <rect x="${t0 + gap / 2}" y="${YT}" width="${Math.max(0, t1 - t0 - gap)}" height="${BAR}" rx="9" fill="${color(i)}"/>
+        <rect x="${b0 + gap / 2}" y="${YB}" width="${Math.max(0, b1 - b0 - gap)}" height="${BAR}" rx="9" fill="${color(i)}" ${out ? 'stroke="#ff5a5f" stroke-width="3"' : fixed ? 'stroke="#34c759" stroke-width="3"' : ''}/>
+        ${t1 - t0 > 44 ? `<text x="${cxT}" y="${YT + 21}" text-anchor="middle" class="seg-name">${s.name}</text><text x="${cxT}" y="${YT + 37}" text-anchor="middle" class="seg-pct">${s.target}%</text>` : ''}
+        ${b1 - b0 > 44 ? `<text x="${cxB}" y="${YB + 21}" text-anchor="middle" class="seg-name">${s.name}</text><text x="${cxB}" y="${YB + 37}" text-anchor="middle" class="seg-pct">${one(w)}%</text>` : ''}
+      </g>`;
+      // 彩帶中間的偏離標示
+      const lx = (cxT + cxB) / 2;
+      if (out) {
+        const p = M.plans[s.id];
+        labels.push(`<g pointer-events="none" transform="translate(${lx},${my})"><rect x="-82" y="-15" width="164" height="30" rx="15" fill="#2a1213" stroke="#ff5a5f"/><text text-anchor="middle" y="5" style="fill:#ffb3b5;font-weight:750;font-size:13px">${sgn(dev)} 點・${p ? (p.side === 'sell' ? '賣 ' : '買 ') + usd(p.value) : ''}</text></g>`);
+      } else if (fixed) {
+        labels.push(`<g pointer-events="none" transform="translate(${lx},${my})"><rect x="-52" y="-14" width="104" height="28" rx="14" fill="#0f2a17" stroke="#34c759"/><text text-anchor="middle" y="5" style="fill:#8fe3a8;font-weight:750;font-size:13px">✓ ${sgn(dev)} 點</text></g>`);
+      } else {
+        labels.push(`<text x="${lx}" y="${my + 4}" text-anchor="middle" pointer-events="none" style="fill:rgba(255,255,255,.55);font-size:12px;font-weight:600">${sgn(dev)}</text>`);
+      }
+    });
+    if (cashW > 0.05) {
+      const b0 = X0 + (ab / bSum) * span, b1 = X0 + ((ab + cashW) / bSum) * span;
+      g += `<rect x="${b0 + 1.5}" y="${YB}" width="${Math.max(0, b1 - b0 - 3)}" height="${BAR}" rx="9" fill="var(--c7)" stroke="rgba(255,255,255,.4)" stroke-dasharray="4 3"/>`;
+      g += `<text x="${Math.min(b1, X1)}" y="${YB + BAR + 18}" text-anchor="end" style="fill:var(--ink-2);font-size:12px">現金 +${usd(M.cash)}</text>`;
+    }
+    return g + labels.join('');
+  }
+
+  // ---------- 畫面 ----------
+  function render() {
+    const M = model();
+    const S = after ? M.A : M.B;
+    const outs = M.B.rows.filter((r) => M.plans[r.id]);
+    const trades = outs.reduce((a, r) => a + M.plans[r.id].trades.length, 0);
+    // 結論
+    document.getElementById('say').innerHTML = after
+      ? `<h1><span class="ok">調整後：每個板塊都在目標附近 ✓</span></h1><p>${M.cash > 0 ? '賣出的 ' + usd(M.cash) + ' 先留作現金，總值不變' : '不需要交易'}</p>`
+      : outs.length
+        ? `<h1>${outs.map((r) => `<span class="bad">${r.name}${M.plans[r.id].side === 'sell' ? '太多了' : '太少了'}</span>`).join('、')}</h1><p>${outs.map((r) => { const p = M.plans[r.id]; return (p.side === 'sell' ? '賣 ' : '買 ') + p.trades.map((t) => `${t.sym} ${t.n} 股`).join('、') + `，就回到 ${p.goal}% 以內`; }).join('；')}</p>`
+        : `<h1><span class="ok">都很好，這次不用動 ✓</span></h1><p>每個板塊都在目標 ±${TOL} 點以內</p>`;
+    document.getElementById('chips').innerHTML = `
+      <span class="chip">總值 <b>${usd(S.total)}</b></span>
+      <span class="chip">板塊 <b>${SECTORS.length}</b></span>
+      <span class="chip ${after ? 'good' : outs.length ? 'bad' : 'good'}">${after ? '調整後超出' : '需要調整'} <b>${after ? 0 : outs.length}</b> 個</span>
+      <span class="chip">${after ? '已模擬' : '建議交易'} <b>${trades}</b> 筆</span>`;
+    const t = document.getElementById('toggle');
+    t.textContent = after ? '◂ 回到目前' : outs.length ? '看調整後 ▸' : '不需要調整';
+    t.classList.toggle('on', after);
+    t.disabled = !after && !outs.length;
+    document.getElementById('hero-title').textContent = after ? '目標配置 → 調整後配置' : '目標配置 → 目前配置';
+    renderCards(M);
+    animateFlow(M);
+  }
+
+  let raf = null;
+  function animateFlow(M) {
+    const goal = (after ? M.A : M.B).rows.map((r) => r.w);
+    const goalCash = after && M.cash > 0 ? (M.cash / M.A.total) * 100 : 0;
+    if (!shown) shown = { w: SECTORS.map((s) => s.target), cash: 0 };
+    cancelAnimationFrame(raf);
+    const from = { w: shown.w.slice(), cash: shown.cash }, t0 = performance.now();
+    const dur = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 900;
+    const step = (now) => {
+      const p = Math.max(0, Math.min(1, (now - t0) / dur)), e = 1 - Math.pow(1 - p, 3);
+      shown = { w: from.w.map((v, i) => v + (goal[i] - v) * e), cash: from.cash + (goalCash - from.cash) * e };
+      const svg = document.getElementById('flow');
+      svg.innerHTML = drawFlow(M, shown.w, shown.cash);
+      svg.classList.toggle('dimmed', !!hot);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  }
+
+  function renderCards(M) {
+    document.getElementById('cards').innerHTML = M.B.rows.map((b) => {
+      const a = M.A.rows.find((x) => x.id === b.id), p = M.plans[b.id];
+      const w = after ? a.w : b.w, lo = Math.max(0, b.target - TOL), hi = b.target + TOL;
+      const MX = Math.max(35, Math.ceil((Math.max(b.w, hi) + 3) / 5) * 5), x = (v) => (Math.max(0, Math.min(v, MX)) / MX) * 100;
+      const cls = after && p ? 'fixed' : !after && p ? 'out' : '';
+      const st = after && p ? `<span class="st ok">✓ 已調整</span>` : p ? `<span class="st ${p.side}">${p.side === 'sell' ? '賣' : '買'} ${usd(p.value)} ›</span>` : `<span class="st ok">✓ 不用動</span>`;
+      return `<div class="card ${cls}${openId === b.id ? ' on' : ''}" data-s="${b.id}" style="--col:${color(b.i)}">
+        <div class="hd"><span class="nm">${b.name}</span>${st}</div>
+        <div class="nums"><b>${one(w)}%</b><span>目標 ${b.target}%・範圍 ${lo}–${hi}%</span></div>
+        <div class="mini"><div class="tr"></div><div class="band" style="left:${x(lo)}%;width:${x(hi) - x(lo)}%"></div><div class="tg" style="left:${x(b.target)}%"></div>
+          ${after && p ? `<div class="ghost" style="left:${x(b.w)}%"></div>` : ''}
+          <div class="dot" style="left:${x(w)}%;background:${!after && p ? 'var(--bad)' : color(b.i)}"></div></div>
+        <div class="scale"><span>0%</span><span>${MX}%</span></div>
+        <div class="how">${p
+          ? (after ? `<p>${one(b.w)}% → ${one(a.w)}%，回到${p.side === 'sell' ? '上限' : '下限'} ${p.goal}% 以內</p>` : '') +
+            p.trades.map((t) => `<div class="t"><b>${t.sym}</b><span class="${t.side}">${t.side === 'sell' ? '賣' : '買'} ${t.n} 股</span><small>約 ${usd(t.value)}</small></div>`).join('') +
+            (after ? '' : `<p>${p.side === 'sell' ? '賣完' : '買完'}約 ${one(p.afterW)}%，回到${p.side === 'sell' ? '上限' : '下限'} ${p.goal}% 以內</p>`)
+          : `<p class="calm">離目標 ${sgn(b.w - b.target)} 點，在範圍內就一股都不用動。</p>`}</div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('toggle').addEventListener('click', () => { after = !after; render(); });
+  document.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-s]');
+    if (!c) return;
+    openId = openId === c.dataset.s ? null : c.dataset.s;
+    render();
+    if (c.closest('#flow')) document.querySelector(`.card[data-s="${c.dataset.s}"]`).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+  const flow = document.getElementById('flow');
+  flow.addEventListener('pointerover', (e) => { const g = e.target.closest('[data-s]'); const id = g ? g.dataset.s : null; if (id !== hot) { hot = id; flow.classList.toggle('dimmed', !!hot); flow.querySelectorAll('.fx').forEach((x) => x.classList.toggle('on', x.dataset.s === hot || x.dataset.s === openId)); } });
+  flow.addEventListener('pointerleave', () => { hot = null; flow.classList.remove('dimmed'); });
+
+  render();
+})();
+</script>
+</body>
+</html>

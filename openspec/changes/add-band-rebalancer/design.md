@@ -2,7 +2,7 @@
 
 ## Context
 
-- 動機見 proposal.md 的 Why。最終視覺與互動以 `design/mockup-simple.html` 為準（單頁、預設深色、圓環 + 可拖曳的區間圖、展開看持股、代號搜尋與報價）。
+- 動機見 proposal.md 的 Why。最終視覺與互動以 `design/mockup-simple.html` 的單頁版面為準，主圖改為 `design/flow.html` 的配置流向圖（單頁、預設深色、流向圖 + 可拖曳的區間圖、展開看持股與建議交易、代號搜尋與報價）。
 - 第一版已完成並驗證過一套分頁式介面與計算 / 儲存模組；這次改成單頁設計，計算與儲存模組保留並調整，畫面整個重寫。
 - 限制：免費 GitHub Pages 需要公開 repo，網址公開，所以 repo 不可夾帶持股資料；使用者不想安裝任何東西；網頁也要能直接用 `file://` 打開。
 - 已實測：Finnhub `/api/v1/quote` 回應帶 `Access-Control-Allow-Origin: *`，瀏覽器可直接呼叫；Nasdaq Trader 代號目錄約 11,700 檔可用證券。
@@ -26,7 +26,7 @@ site/
   index.html
   styles.css
   data/symbols.js   內建美股代號清單（scripts/build-symbols.js 產生，約 516 KB）
-  js/calc.js        權重、狀態、回到區間 / 目標金額、比例尺
+  js/calc.js        權重、狀態、回到區間 / 目標金額、比例尺、建議股數（planTrades）、調整後狀態（rebalance）
   js/editing.js     拖曳規則：設定目標 / 下限 / 上限、區間平移、合計補正、快速套用、新增 / 刪除板塊
   js/search.js      代號模糊搜尋與標示
   js/quotes.js      Finnhub 報價查詢（可注入 fetch，便於測試）、併發上限
