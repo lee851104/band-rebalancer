@@ -40,26 +40,36 @@
     };
   }
 
+  /** 預設類別：從空白開始與範例資料都用這六個板塊（目標合計 100%，區間為目標 ±5 點） */
+  function defaultSectors() {
+    return [
+      { id: 's_rocket', name: '火箭', lo: 10, target: 15, hi: 20 },
+      { id: 's_optics', name: '光', lo: 10, target: 15, hi: 20 },
+      { id: 's_software', name: '軟體', lo: 15, target: 20, hi: 25 },
+      { id: 's_ev', name: '電動車', lo: 10, target: 15, hi: 20 },
+      { id: 's_health', name: '醫療', lo: 10, target: 15, hi: 20 },
+      { id: 's_semis', name: '半導體', lo: 15, target: 20, hi: 25 },
+    ];
+  }
+
+  /** 從空白開始：只有預設類別，沒有持股 */
+  function defaultData() {
+    var d = emptyData();
+    d.sectors = defaultSectors();
+    return d;
+  }
+
   /** 範例資料（虛構數字，僅供試用） */
   function sampleData() {
     var d = emptyData();
-    d.sectors = [
-      { id: 's_gold', name: '黃金', lo: 10, target: 15, hi: 20 },
-      { id: 's_uranium', name: '鈾', lo: 6, target: 10, hi: 14 },
-      { id: 's_semis', name: '半導體', lo: 14, target: 20, hi: 25 },
-      { id: 's_auto', name: '自動駕駛', lo: 8, target: 15, hi: 20 },
-      { id: 's_software', name: '軟體', lo: 10, target: 15, hi: 20 },
-      { id: 's_copper', name: '銅', lo: 6, target: 10, hi: 14 },
-      { id: 's_cash', name: '現金', lo: 5, target: 15, hi: 25 },
-    ];
+    d.sectors = defaultSectors();
     var rows = [
-      ['GLD', 's_gold', 100, 245], ['IAU', 's_gold', 320, 50],
-      ['CCJ', 's_uranium', 300, 72], ['URA', 's_uranium', 230, 42],
+      ['RKLB', 's_rocket', 1000, 25], ['LUNR', 's_rocket', 1500, 12],
+      ['COHR', 's_optics', 250, 90], ['LITE', 's_optics', 125, 80],
+      ['MSFT', 's_software', 50, 480], ['CRM', 's_software', 80, 275],
+      ['TSLA', 's_ev', 50, 440], ['RIVN', 's_ev', 500, 14],
+      ['LLY', 's_health', 30, 800], ['ISRG', 's_health', 19, 500],
       ['NVDA', 's_semis', 200, 185], ['TSM', 's_semis', 70, 260], ['AMD', 's_semis', 50, 216],
-      ['TSLA', 's_auto', 100, 445],
-      ['MSFT', 's_software', 40, 480], ['CRM', 's_software', 40, 270],
-      ['FCX', 's_copper', 250, 47], ['COPX', 's_copper', 120, 50],
-      ['USD', 's_cash', 19990, 1],
     ];
     d.holdings = rows.map(function (r, i) {
       return { id: 'h_sample' + i, sym: r[0], sectorId: r[1], shares: r[2], price: r[3], quoteAt: null };
@@ -242,6 +252,8 @@
     daysBetween: daysBetween,
     emptyData: emptyData,
     sampleData: sampleData,
+    defaultSectors: defaultSectors,
+    defaultData: defaultData,
     validateData: validateData,
     createStorage: createStorage,
     exportPayload: exportPayload,

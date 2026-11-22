@@ -21,6 +21,19 @@ test('範例資料通過驗證、總市值 $250,000、預設深色', () => {
   assert.equal(calc.computePortfolio(res.data.sectors, res.data.holdings).total, 250000);
 });
 
+test('預設類別：火箭、光、軟體、電動車、醫療、半導體，目標合計 100%、沒有持股', () => {
+  const d = store.defaultData();
+  assert.deepEqual(d.sectors.map((s) => s.name), ['火箭', '光', '軟體', '電動車', '醫療', '半導體']);
+  assert.equal(d.sectors.reduce((a, s) => a + s.target, 0), 100);
+  for (const s of d.sectors) assert.ok(s.lo === s.target - 5 && s.hi === s.target + 5, s.name);
+  assert.equal(d.holdings.length, 0);
+  assert.equal(store.validateData(d).ok, true);
+  // 範例資料用同樣的類別，每個類別都有持股
+  const sample = store.sampleData();
+  assert.deepEqual(sample.sectors, d.sectors);
+  for (const s of sample.sectors) assert.ok(sample.holdings.some((h) => h.sectorId === s.id), s.name);
+});
+
 test('空資料預設深色、能通過驗證', () => {
   const d = store.emptyData();
   assert.equal(d.prefs.theme, 'dark');

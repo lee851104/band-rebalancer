@@ -136,7 +136,7 @@
       '<div class="row-btns">' +
       '<button class="btn primary" type="button" data-action="sample">載入範例資料</button>' +
       '<button class="btn" type="button" data-action="import">從備份檔匯入</button>' +
-      '<button class="btn" type="button" data-action="blank">從空白開始</button>' +
+      '<button class="btn" type="button" data-action="blank">用預設類別開始</button>' +
       '</div>' +
       '<p class="fine">範例資料的數字都是虛構的・' + (storage.available ? '資料只存在這台裝置的瀏覽器，不會上傳' : '這個瀏覽器無法保存資料，請記得匯出備份') + '</p>' +
       '</div>';
@@ -827,7 +827,16 @@
         if (storage.getApiKey()) refreshAll(true);
         break;
       }
-      case 'blank': onboarding = false; commit(); break;
+      case 'blank': {
+        // 預設類別：火箭、光、軟體、電動車、醫療、半導體（沒有持股）
+        var th = data.prefs.theme;
+        data = store.defaultData();
+        data.prefs.theme = th;
+        onboarding = false;
+        commit();
+        toast('已建立預設類別，點板塊名稱開始新增持股');
+        break;
+      }
     }
   });
 

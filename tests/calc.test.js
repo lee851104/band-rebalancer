@@ -59,9 +59,10 @@ test('回到區間與回到目標的金額：26.4%、上限 25%、目標 20% →
   assert.equal(semis.edge, 25);
   assert.equal(Math.round(semis.toEdge), -3500);
   assert.equal(Math.round(semis.toTarget), -16000);
-  const gold = p.rows.find((r) => r.id === 's_gold');
-  assert.equal(gold.edge, null);
-  assert.equal(gold.toEdge, 0);
+  const rocket = p.rows.find((r) => r.id === 's_rocket');
+  assert.equal(rocket.status, 'ok');
+  assert.equal(rocket.edge, null);
+  assert.equal(rocket.toEdge, 0);
 });
 
 test('低於下限為買入', () => {
