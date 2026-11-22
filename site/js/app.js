@@ -18,6 +18,7 @@
 
   var openId = null, focusId = null, first = true, dragging = null, scaleMax = null, dragEnded = 0;
   var afterView = false; // 是否在看「照建議交易後」的樣子
+  var editId = null;      // 正在編輯股票清單的板塊（其他板塊只顯示代號與股數）
   var untouched = {};   // 剛新增、還沒填過的持股，先不標紅框
   var quoteErr = {};    // 持股 id → 查價錯誤代碼（只存在記憶體）
   var symIndex = null, symNames = null, symLoading = null;
@@ -27,6 +28,7 @@
     warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 8v5"/><circle cx="12" cy="16.6" r=".6" fill="currentColor"/><path d="M10.3 3.9L2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
     info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r=".6" fill="currentColor"/></svg>',
     lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+    pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',
     trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
@@ -403,12 +405,27 @@
 
   // 持股清單：結構改變時才重建；打字時只更新提示文字
   function holdingsVersion(sectorId) {
-    return data.holdings.filter(function (h) { return h.sectorId === sectorId; }).map(function (h) { return h.id; }).join(',');
+    var list = data.holdings.filter(function (h) { return h.sectorId === sectorId; });
+    // 編輯中只看有哪些持股（打字時不重建）；瀏覽時代號、股數變了就要更新標籤
+    if (editId === sectorId) return 'edit:' + list.map(function (h) { return h.id; }).join(',');
+    return 'view:' + list.map(function (h) { return h.id + '=' + h.sym + '@' + h.shares; }).join(',');
   }
+  function sharesTxt(n) { return calc.isNum(n) ? (Number.isInteger(n) ? n.toLocaleString('en-US') : String(n)) : '—'; }
 
   function renderHoldings(el, r) {
     var list = data.holdings.filter(function (h) { return h.sectorId === r.id; });
     el.dataset.hv = holdingsVersion(r.id);
+    if (editId !== r.id) {
+      // 瀏覽：一排小標籤，只寫代號與股數
+      var chips = list.filter(function (h) { return h.sym; }).map(function (h) {
+        return quotes.isCash(h.sym)
+          ? '<span class="hchip"><b>現金</b><small>' + (calc.isNum(h.shares) ? usd(h.shares) : '—') + '</small></span>'
+          : '<span class="hchip" title="' + esc(symNames && symNames[h.sym] || h.sym) + '"><b>' + esc(h.sym) + '</b><small>' + sharesTxt(h.shares) + ' 股</small></span>';
+      }).join('');
+      el.querySelector('.hold').innerHTML = '<div class="hview">' + (chips || '<span class="tip">還沒有股票</span>') +
+        '<button class="edit-btn" type="button" data-edit-s="' + esc(r.id) + '">' + (list.length ? ICON.pen + '編輯' : ICON.plus + '新增股票') + '</button></div>';
+      return;
+    }
     el.querySelector('.hold').innerHTML =
       '<div class="set-row">' +
       '<label>名稱<input data-sector-name="' + esc(r.id) + '" value="' + esc(r.name) + '" placeholder="板塊名稱"></label>' +
@@ -426,7 +443,8 @@
       '</tbody></table>' +
       '<div class="hold-foot"><button class="add" type="button" data-add-h="' + esc(r.id) + '">' + ICON.plus + '新增股票</button>' +
       '<span class="tip">現金：代號打 USD，股數填金額</span>' +
-      '<button class="text-btn" type="button" data-del-s="' + esc(r.id) + '">刪除這個板塊</button></div>';
+      '<button class="text-btn" type="button" data-del-s="' + esc(r.id) + '">刪除這個板塊</button>' +
+      '<button class="done-btn" type="button" data-done-s="' + esc(r.id) + '">完成</button></div>';
   }
 
   function updateHoldingCells(el, r) {
@@ -477,6 +495,7 @@
 
   function toggle(id, scroll) {
     openId = openId === id && !scroll ? null : id;
+    if (editId && editId !== openId) editId = null;
     render();
     if (scroll) {
       var el = document.querySelector('.row[data-id="' + id + '"]');
@@ -871,6 +890,13 @@
     if (b.dataset.open) { toggle(b.dataset.open, true); return; }
     if (b.dataset.preset) { ed.applyPreset(data.sectors, b.dataset.preset); commit(); toast('已把所有板塊的區間設為目標 ' + b.textContent); return; }
     if (b.dataset.addH) { addHolding(b.dataset.addH); return; }
+    if (b.dataset.editS) {
+      editId = b.dataset.editS;
+      if (!data.holdings.some(function (h) { return h.sectorId === editId; })) { addHolding(editId); return; }
+      render();
+      return;
+    }
+    if (b.dataset.doneS) { editId = null; render(); return; }
     if (b.dataset.delH) { deleteHolding(b.dataset.delH); return; }
     if (b.dataset.delS) { deleteSector(b.dataset.delS); return; }
     switch (b.dataset.action) {
@@ -915,6 +941,7 @@
   function addSector() {
     var s = ed.addSector(data.sectors, store.uid('s'), '新板塊');
     setTarget(s, s.target);
+    editId = s.id; // 新板塊直接進入編輯，方便取名
     openId = s.id;
     commit();
     var el = document.querySelector('.row[data-id="' + s.id + '"]');
@@ -944,6 +971,7 @@
   }
 
   function addHolding(sectorId) {
+    editId = sectorId;
     var h = { id: store.uid('h'), sym: '', sectorId: sectorId, shares: null, price: null, quoteAt: null };
     data.holdings.push(h);
     untouched[h.id] = true;
