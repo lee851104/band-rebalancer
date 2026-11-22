@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="區間再平衡：替每個板塊設定目標與允許區間，一眼看出哪裡需要調整。資料只存在你的瀏覽器。">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="區間再平衡">
+<meta name="referrer" content="no-referrer">
+<title>區間再平衡</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233987e5'/%3E%3Cpath d='M7 10h18M7 16h18M7 22h18' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='10' r='2.2' fill='white'/%3E%3Ccircle cx='20' cy='16' r='2.2' fill='white'/%3E%3Ccircle cx='14' cy='22' r='2.2' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+<script>
+  // 預設深色；使用者選過淺色就在畫面出現前套用，避免閃爍
+  try {
+    var saved = JSON.parse(localStorage.getItem('band-rebalancer:v1') || 'null');
+    if (saved && saved.prefs && saved.prefs.theme === 'light') document.documentElement.dataset.theme = 'light';
+  } catch (e) {}
+</script>
+<script src="js/calc.js" defer></script>
+<script src="js/editing.js" defer></script>
+<script src="js/search.js" defer></script>
+<script src="js/quotes.js" defer></script>
+<script src="js/store.js" defer></script>
+<script src="js/app.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="1.6" fill="currentColor"/><circle cx="15" cy="12" r="1.6" fill="currentColor"/><circle cx="11" cy="17" r="1.6" fill="currentColor"/></svg>
+    </div>
+    <h1>區間再平衡</h1>
+    <button class="quote-btn" id="refresh-btn" type="button" title="查詢所有持股的最新價格">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4.2L4 8.5M4 4v4.5h4.5M4 13a8 8 0 0 0 14.8 4.2l1.2-1.7M20 20v-4.5h-4.5"/></svg>
+      <span class="txt">更新報價</span><span class="at" id="quote-at"></span>
+    </button>
+    <button class="icon-btn theme-btn" id="theme-btn" type="button" aria-label="切換深淺色" title="切換深淺色">
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <div class="menu-wrap">
+      <button class="icon-btn" id="menu-btn" type="button" aria-label="更多" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+      </button>
+      <div class="menu" id="menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-action="export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>匯出備份</button>
+        <button type="button" role="menuitem" data-action="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>從備份匯入</button>
+        <button type="button" role="menuitem" data-action="key"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3M17 6l3 3M15 8l2 2"/></svg>報價設定（Finnhub 金鑰）</button>
+        <div class="meta" id="menu-meta"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" role="status" hidden></div>
+
+  <section class="card" id="onboard" hidden></section>
+
+  <section class="card" id="main" hidden>
+    <div class="hero">
+      <div class="donut" id="donut">
+        <svg viewBox="-120 -120 240 240" aria-hidden="true"><circle class="track-ring" r="90"/><g id="slices"></g></svg>
+        <div class="center" id="center"></div>
+      </div>
+      <div class="verdict" id="verdict" aria-live="polite"></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11.5v-1.5a1.5 1.5 0 0 1 3 0V12M14 11a1.5 1.5 0 0 1 3 0v1.5M17 12.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2c-2.2 0-3.5-.7-4.7-2l-3.2-3.5a1.5 1.5 0 0 1 2.2-2.1L8 16"/></svg>拖曳藍框兩端改區間、拖曳黑線改目標；點板塊名稱看持股</div>
+      <div class="tools">
+        <span class="sum" id="sum"></span>
+        <span class="presets" role="group" aria-label="區間快速套用"><span>區間</span><button type="button" data-preset="pt3">±3 點</button><button type="button" data-preset="pt5">±5 點</button><button type="button" data-preset="rel25">±25%</button></span>
+      </div>
+    </div>
+
+    <div class="rows" id="rows" role="list" aria-label="各板塊"></div>
+
+    <div class="foot-bar">
+      <button class="add" id="add-s" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增板塊</button>
+      <div class="legend" aria-hidden="true"><span><i class="lg-band"></i>允許區間</span><span><i class="lg-target"></i>目標</span><span><i class="lg-dot"></i>目前權重</span><span><i class="lg-gap"></i>超出的距離</span></div>
+    </div>
+  </section>
+
+  <p class="tip" style="text-align:center;margin-top:16px">金額以「總市值不變、買賣的錢進出現金」估算，僅供參考，不是投資建議。</p>
+</div>
+
+<input type="file" id="file-import" accept=".json,application/json" hidden>
+
+<dialog class="dlg" id="dlg" aria-labelledby="dlg-title">
+  <div class="dlg-body"><h2 id="dlg-title"></h2><p id="dlg-msg"></p></div>
+  <div class="dlg-foot">
+    <button class="btn" type="button" id="dlg-cancel">取消</button>
+    <button class="btn primary" type="button" id="dlg-ok">確定</button>
+  </div>
+</dialog>
+
+<dialog class="dlg" id="key-dlg" aria-labelledby="key-title">
+  <div class="dlg-body">
+    <h2 id="key-title">報價設定</h2>
+    <p>用你自己的 Finnhub 免費金鑰查詢美股最新價格。</p>
+    <ol>
+      <li>到 <a href="https://finnhub.io/register" target="_blank" rel="noopener noreferrer">finnhub.io</a> 免費註冊</li>
+      <li>登入後在 Dashboard 複製 API Key</li>
+      <li>貼在下面，按「測試並儲存」</li>
+    </ol>
+    <label class="sr-only" for="key-input">Finnhub API 金鑰</label>
+    <div class="key-row">
+      <input id="key-input" type="password" autocomplete="off" spellcheck="false" placeholder="貼上 API Key">
+      <button class="btn" type="button" id="key-show" aria-label="顯示金鑰">顯示</button>
+    </div>
+    <div class="key-status" id="key-status" role="status"></div>
+    <div class="privacy">金鑰只存在這台裝置的瀏覽器，不會出現在備份檔。查報價時只會把股票代號送給 Finnhub，股數與金額不會離開你的裝置。</div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn" type="button" id="key-clear">清除金鑰</button>
+    <span class="spacer"></span>
+    <button class="btn" type="button" id="key-cancel">取消</button>
+    <button class="btn primary" type="button" id="key-save">測試並儲存</button>
+  </div>
+</dialog>
+
+<div class="combo" id="combo" role="listbox" aria-label="代號搜尋結果" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

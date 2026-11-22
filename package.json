@@ -1,0 +1,9 @@
+{
+  "name": "band-rebalancer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "區間再平衡：手動填寫持倉、資料只存在瀏覽器的倉位管理網頁",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  }
+}

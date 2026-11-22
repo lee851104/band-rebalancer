@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>區間再平衡</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f4f4f1;
+    --surface: #fcfcfb;
+    --surface-2: #f0efec;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --band-fill: rgba(42, 120, 214, 0.10);
+    --band-edge: rgba(42, 120, 214, 0.45);
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --now: #eb6834;
+    --prev: #a9a8a1;
+    --good: #0ca30c;
+    --warning: #fab219;
+    --critical: #d03b3b;
+    --shadow: 0 1px 2px rgba(11, 11, 11, 0.04), 0 8px 24px rgba(11, 11, 11, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --surface-2: #242422;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --band-fill: rgba(57, 135, 229, 0.16);
+      --band-edge: rgba(57, 135, 229, 0.55);
+      --accent: #3987e5;
+      --now: #f07a45;
+      --prev: #77766f;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #242422;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --band-fill: rgba(57, 135, 229, 0.16);
+    --band-edge: rgba(57, 135, 229, 0.55);
+    --accent: #3987e5;
+    --now: #f07a45;
+    --prev: #77766f;
+    --shadow: none;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
+
+  /* ---------- header ---------- */
+  header.top {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 36px; height: 36px; border-radius: 10px; background: var(--accent);
+    display: grid; place-items: center; color: #fff;
+  }
+  .brand h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: 0.01em; }
+  .brand p { margin: 0; color: var(--muted); font-size: 12.5px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: inherit; color: inherit; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 36px; padding: 0 14px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+    cursor: pointer; font-weight: 550; font-size: 13.5px;
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .btn.primary:hover { filter: brightness(1.07); }
+  .btn.icon { width: 36px; padding: 0; justify-content: center; }
+  .btn svg { width: 16px; height: 16px; }
+
+  .notice {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; border-radius: 10px; margin-bottom: 20px;
+    background: var(--surface); border: 1px solid var(--border); color: var(--ink-2); font-size: 13px;
+  }
+  .notice svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+  .notice .link { color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; font-weight: 550; }
+
+  /* ---------- tiles ---------- */
+  .tiles { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .tile .label { color: var(--ink-2); font-size: 12.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .tile .value { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.15; }
+  .tile.hero .value { font-size: 32px; }
+  .tile .sub { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .delta-up { color: var(--ink-2); }
+  .dot-i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* ---------- cards ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: var(--shadow); margin-bottom: 16px;
+  }
+  .card-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 18px 20px 6px;
+  }
+  .card-head h2 { margin: 0; font-size: 16px; font-weight: 650; }
+  .card-head p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+  .card-body { padding: 8px 20px 20px; }
+
+  .compare { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; }
+  select, input {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; height: 32px; padding: 0 10px;
+  }
+  select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; color: var(--ink-2); font-size: 12.5px; padding: 4px 0 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .lg-band { width: 22px; height: 12px; border-radius: 3px; background: var(--band-fill); border: 1px solid var(--band-edge); }
+  .lg-target { width: 2px; height: 14px; background: var(--ink); border-radius: 1px; }
+  .lg-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* ---------- band chart ---------- */
+  .chart { display: grid; gap: 4px; }
+  .row {
+    display: grid; grid-template-columns: 132px 1fr 92px 124px; align-items: center; gap: 16px;
+    padding: 8px 10px; border-radius: 10px; transition: background .12s;
+  }
+  .row:hover { background: var(--surface-2); }
+  .row-label .name { font-weight: 600; font-size: 14px; }
+  .row-label .en { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .row-label .mobile-val { display: none; }
+  .track { position: relative; height: 34px; }
+  .track .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--grid); }
+  .track .base { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--grid); }
+  .band {
+    position: absolute; top: 5px; bottom: 5px; border-radius: 6px;
+    background: var(--band-fill); border: 1px solid var(--band-edge);
+  }
+  .target { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: var(--ink); border-radius: 1px; }
+  .move { position: absolute; top: 50%; height: 2px; margin-top: -1px; background: var(--prev); opacity: .7; border-radius: 1px; }
+  .dot {
+    position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+    border: 2px solid var(--surface); padding: 0; cursor: default;
+  }
+  .row:hover .dot { border-color: var(--surface-2); }
+  .dot::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; }
+  .dot.prev { background: var(--prev); width: 12px; height: 12px; margin: -6px 0 0 -6px; }
+  .dot.now { background: var(--now); width: 18px; height: 18px; margin: -9px 0 0 -9px; z-index: 2; }
+  .row-value { text-align: right; font-variant-numeric: tabular-nums; }
+  .row-value b { font-size: 15px; font-weight: 650; }
+  .row-value small { display: block; color: var(--muted); font-size: 12px; }
+  .status {
+    justify-self: start; display: inline-flex; align-items: center; gap: 6px;
+    height: 28px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--ink);
+    white-space: nowrap;
+  }
+  .status svg { width: 14px; height: 14px; flex: none; }
+  .status.ok { background: color-mix(in srgb, var(--good) 13%, transparent); }
+  .status.ok svg { color: var(--good); }
+  .status.warn { background: color-mix(in srgb, var(--warning) 20%, transparent); }
+  .status.warn svg { color: #b07600; }
+  :root[data-theme="dark"] .status.warn svg { color: var(--warning); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .status.warn svg { color: var(--warning); } }
+  .status.crit { background: color-mix(in srgb, var(--critical) 15%, transparent); }
+  .status.crit svg { color: var(--critical); }
+  .axis { display: grid; grid-template-columns: 132px 1fr 92px 124px; gap: 16px; padding: 0 10px; }
+  .axis .ticks { position: relative; height: 18px; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .axis .ticks span { position: absolute; transform: translateX(-50%); top: 2px; }
+
+  /* ---------- todo ---------- */
+  .todo { display: grid; gap: 10px; }
+  .todo-item {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center;
+    padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border); background: var(--page);
+  }
+  .todo-item .ic { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; }
+  .todo-item .ic svg { width: 18px; height: 18px; }
+  .todo-item.crit .ic { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
+  .todo-item.warn .ic { background: color-mix(in srgb, var(--warning) 22%, transparent); color: #b07600; }
+  .todo-item h3 { margin: 0; font-size: 14.5px; font-weight: 650; }
+  .todo-item p { margin: 2px 0 0; color: var(--ink-2); font-size: 13px; }
+  .todo-amts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .amt { text-align: right; padding: 6px 12px; border-radius: 9px; background: var(--surface); border: 1px solid var(--border); }
+  .amt small { display: block; color: var(--muted); font-size: 11.5px; }
+  .amt b { font-variant-numeric: tabular-nums; font-size: 14px; }
+  .todo-empty { display: flex; align-items: center; gap: 12px; padding: 16px; color: var(--ink-2); }
+  .todo-empty svg { width: 22px; height: 22px; color: var(--good); }
+  .fine { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
+
+  /* ---------- tabs & tables ---------- */
+  .tabs { display: flex; gap: 4px; padding: 14px 20px 0; border-bottom: 1px solid var(--border); }
+  .tab {
+    background: none; border: 0; padding: 10px 14px; cursor: pointer; color: var(--ink-2); font-weight: 600;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .panel { padding: 8px 20px 20px; overflow-x: auto; }
+  .panel[hidden] { display: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 550; font-size: 12.5px; padding: 12px 8px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td input { width: 100%; min-width: 72px; }
+  td input.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td input.sym { text-transform: uppercase; font-weight: 600; min-width: 80px; }
+  td select { width: 100%; min-width: 110px; }
+  .del { background: none; border: 0; color: var(--muted); cursor: pointer; width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; }
+  .del:hover { background: var(--surface-2); color: var(--critical); }
+  .del svg { width: 15px; height: 15px; }
+  .table-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 12px; flex-wrap: wrap; color: var(--ink-2); font-size: 13px; }
+  .sum-bad { color: var(--critical); font-weight: 600; }
+  .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; vertical-align: -1px; background: var(--band-edge); }
+
+  /* ---------- tooltip & toast ---------- */
+  .tip {
+    position: fixed; z-index: 50; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--ink); color: var(--surface); padding: 8px 10px; border-radius: 8px; font-size: 12.5px;
+    line-height: 1.45; white-space: nowrap; transform: translate(-50%, calc(-100% - 12px));
+  }
+  .tip b { font-weight: 650; }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0;
+    background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; font-size: 13.5px;
+    transition: all .2s; z-index: 60;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .draft {
+    display: inline-block; font-size: 11px; font-weight: 650; letter-spacing: .04em;
+    padding: 2px 7px; border-radius: 6px; background: var(--surface-2); color: var(--ink-2); margin-left: 8px; vertical-align: 2px;
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 860px) {
+    .tiles { grid-template-columns: 1fr 1fr; }
+    .tile.hero { grid-column: 1 / -1; }
+    .tile:last-child { grid-column: 1 / -1; }
+    .tile .value { font-size: 22px; white-space: nowrap; }
+  }
+  @media (max-width: 720px) {
+    .row { grid-template-columns: 1fr auto; grid-template-areas: "label status" "track track"; gap: 6px 12px; padding: 10px 6px; }
+    .row-label { grid-area: label; }
+    .row-label .mobile-val { display: inline; color: var(--ink-2); margin-left: 8px; font-variant-numeric: tabular-nums; font-weight: 600; }
+    .track { grid-area: track; }
+    .row-value { display: none; }
+    .status { grid-area: status; justify-self: end; }
+    .axis { grid-template-columns: 1fr; padding: 0 6px; }
+    .axis > div:not(.ticks) { display: none; }
+    .todo-item { grid-template-columns: auto 1fr; }
+    .todo-amts { grid-column: 1 / -1; justify-content: flex-start; }
+    .actions .btn:not(.primary) .txt { display: none; }
+    .actions .btn { padding: 0 11px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="1.6" fill="currentColor"/><circle cx="15" cy="12" r="1.6" fill="currentColor"/><circle cx="11" cy="17" r="1.6" fill="currentColor"/></svg>
+      </div>
+      <div>
+        <h1>區間再平衡<span class="draft">設計稿 · 範例資料</span></h1>
+        <p>在區間內就不動，超出區間才調整</p>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-import" title="匯入備份檔">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg><span class="txt">匯入</span>
+      </button>
+      <button class="btn" id="btn-export" title="匯出備份檔">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg><span class="txt">匯出</span>
+      </button>
+      <button class="btn icon" id="btn-theme" title="切換深淺色" aria-label="切換深淺色">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <button class="btn primary" id="btn-snap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg><span class="txt">存成今天的快照</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="notice">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+    <span>資料只存在這台裝置的瀏覽器，不會上傳。上次備份：<b>11 月 15 日</b>（7 天前）</span>
+    <button class="link" id="btn-export-2">立即備份</button>
+  </div>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>各板塊在允許區間裡的位置</h2>
+        <p id="chart-sub"></p>
+      </div>
+      <label class="compare">比較
+        <select id="cmp"></select>
+        <span>→ 目前</span>
+      </label>
+    </div>
+    <div class="card-body">
+      <div class="legend">
+        <span><i class="lg-band"></i>允許區間</span>
+        <span><i class="lg-target"></i>目標</span>
+        <span><i class="lg-dot" style="background:var(--prev)"></i><span id="lg-prev">上次快照</span></span>
+        <span><i class="lg-dot" style="background:var(--now)"></i>目前</span>
+      </div>
+      <div class="chart" id="chart" role="list"></div>
+      <div class="axis" aria-hidden="true"><div></div><div class="ticks" id="ticks"></div><div></div><div></div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>這次要做什麼</h2>
+        <p>只列出超出區間或接近邊緣的板塊</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="todo" id="todo"></div>
+      <p class="fine">金額以「總市值不變、買賣的錢進出現金」估算，僅供參考，不是投資建議。</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="holdings">持倉</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="sectors">板塊與區間</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="snaps">快照紀錄</button>
+    </div>
+    <div class="panel" id="p-holdings"></div>
+    <div class="panel" id="p-sectors" hidden></div>
+    <div class="panel" id="p-snaps" hidden></div>
+  </section>
+
+</div>
+
+<div class="tip" id="tip"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const TODAY = '2026-11-22';
+
+  const state = {
+    sectors: [
+      { id: 'gold',     name: '黃金',     en: 'Gold',     target: 15, lo: 10, hi: 20 },
+      { id: 'uranium',  name: '鈾',       en: 'Uranium',  target: 10, lo: 6,  hi: 14 },
+      { id: 'semis',    name: '半導體',   en: 'Semis',    target: 20, lo: 14, hi: 25 },
+      { id: 'auto',     name: '自動駕駛', en: 'TSLA',     target: 15, lo: 8,  hi: 20 },
+      { id: 'software', name: '軟體',     en: 'Software', target: 15, lo: 10, hi: 20 },
+      { id: 'copper',   name: '銅',       en: 'Copper',   target: 10, lo: 6,  hi: 14 },
+      { id: 'cash',     name: '現金',     en: 'Cash',     target: 15, lo: 5,  hi: 25 },
+    ],
+    holdings: [
+      { sym: 'GLD',  sector: 'gold',     shares: 100,   price: 245 },
+      { sym: 'IAU',  sector: 'gold',     shares: 320,   price: 50 },
+      { sym: 'CCJ',  sector: 'uranium',  shares: 300,   price: 72 },
+      { sym: 'URA',  sector: 'uranium',  shares: 230,   price: 42 },
+      { sym: 'NVDA', sector: 'semis',    shares: 200,   price: 185 },
+      { sym: 'TSM',  sector: 'semis',    shares: 70,    price: 260 },
+      { sym: 'AMD',  sector: 'semis',    shares: 50,    price: 216 },
+      { sym: 'TSLA', sector: 'auto',     shares: 100,   price: 445 },
+      { sym: 'MSFT', sector: 'software', shares: 40,    price: 480 },
+      { sym: 'CRM',  sector: 'software', shares: 40,    price: 270 },
+      { sym: 'FCX',  sector: 'copper',   shares: 250,   price: 47 },
+      { sym: 'COPX', sector: 'copper',   shares: 120,   price: 50 },
+      { sym: 'USD',  sector: 'cash',     shares: 20000, price: 1 },
+    ],
+    snapshots: [
+      { date: '2026-09-28', total: 226800, weights: { gold: 14.2, uranium: 8.1, semis: 19.4, auto: 14.9, software: 16.0, copper: 10.3, cash: 17.1 } },
+      { date: '2026-10-30', total: 238400, weights: { gold: 13.0, uranium: 9.4, semis: 22.1, auto: 16.5, software: 14.6, copper: 9.2, cash: 15.2 } },
+    ],
+    cmpIndex: 1,
+  };
+  const NEAR = 1.5; // 距離邊緣幾個百分點內算「接近」
+
+  const $ = (s) => document.querySelector(s);
+  const usd = (n) => '$' + Math.round(n).toLocaleString('en-US');
+  const pct = (n) => (Math.round(n * 10) / 10).toFixed(1) + '%';
+  const fmtDate = (d) => { const [, m, day] = d.split('-'); return `${+m} 月 ${+day} 日`; };
+  const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+
+  const ICON = {
+    ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 8v5"/><circle cx="12" cy="16.6" r=".6" fill="currentColor"/><path d="M10.3 3.9L2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+    up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  };
+
+  function compute() {
+    const bySector = Object.fromEntries(state.sectors.map((s) => [s.id, 0]));
+    let total = 0;
+    for (const h of state.holdings) {
+      const v = (+h.shares || 0) * (+h.price || 0);
+      if (h.sector in bySector) bySector[h.sector] += v;
+      total += v;
+    }
+    const rows = state.sectors.map((s) => {
+      const value = bySector[s.id];
+      const w = total ? (value / total) * 100 : 0;
+      let status = 'ok';
+      if (w > s.hi) status = 'over';
+      else if (w < s.lo) status = 'under';
+      else if (s.hi - w <= NEAR) status = 'near-hi';
+      else if (w - s.lo <= NEAR) status = 'near-lo';
+      return { ...s, value, w, status };
+    });
+    return { total, rows };
+  }
+
+  function statusChip(st) {
+    if (st === 'over') return `<span class="status crit">${ICON.warn}超出上限</span>`;
+    if (st === 'under') return `<span class="status crit">${ICON.warn}低於下限</span>`;
+    if (st === 'near-hi') return `<span class="status warn">${ICON.warn}接近上限</span>`;
+    if (st === 'near-lo') return `<span class="status warn">${ICON.warn}接近下限</span>`;
+    return `<span class="status ok">${ICON.ok}區間內</span>`;
+  }
+
+  function render() {
+    const { total, rows } = compute();
+    const snap = state.snapshots[state.cmpIndex];
+    const prevW = snap ? snap.weights : {};
+
+    // tiles
+    const outCount = rows.filter((r) => r.status === 'over' || r.status === 'under').length;
+    const nearCount = rows.filter((r) => r.status.startsWith('near')).length;
+    const inCount = rows.length - outCount;
+    const chg = snap ? ((total - snap.total) / snap.total) * 100 : 0;
+    $('#tiles').innerHTML = `
+      <div class="tile hero"><div class="label">總市值</div><div class="value">${usd(total)}</div>
+        <div class="sub">${snap ? `比 ${fmtDate(snap.date)} ${chg >= 0 ? '多' : '少'} ${Math.abs(chg).toFixed(1)}%（${chg >= 0 ? '+' : '−'}${usd(Math.abs(total - snap.total))}）` : '尚無快照可比較'}</div></div>
+      <div class="tile"><div class="label"><i class="dot-i" style="background:var(--good)"></i>區間內</div><div class="value">${inCount} <span style="font-size:16px;color:var(--muted);font-weight:500">/ ${rows.length} 個板塊</span></div><div class="sub">${nearCount ? `其中 ${nearCount} 個接近邊緣` : '都在安全範圍'}</div></div>
+      <div class="tile"><div class="label"><i class="dot-i" style="background:var(--critical)"></i>需要調整</div><div class="value">${outCount}</div><div class="sub">${outCount ? '超出區間的板塊' : '這次一股都不用動'}</div></div>
+      <div class="tile"><div class="label">上次快照</div><div class="value">${fmtDate(state.snapshots.at(-1).date)}</div><div class="sub">${daysBetween(state.snapshots.at(-1).date, TODAY)} 天前 · 共 ${state.snapshots.length} 筆</div></div>`;
+
+    // compare select
+    $('#cmp').innerHTML = state.snapshots.map((s, i) => `<option value="${i}" ${i === state.cmpIndex ? 'selected' : ''}>${fmtDate(s.date)}</option>`).join('');
+    $('#lg-prev').textContent = snap ? fmtDate(snap.date) : '上次快照';
+    $('#chart-sub').textContent = snap ? `${fmtDate(snap.date)} → 今天（${fmtDate(TODAY)}）` : '';
+
+    // scale
+    const maxV = Math.max(...rows.map((r) => Math.max(r.hi, r.w, prevW[r.id] || 0)));
+    const max = Math.ceil((maxV + 2) / 5) * 5;
+    const x = (v) => (Math.max(0, Math.min(v, max)) / max) * 100;
+    const ticks = []; for (let t = 0; t <= max; t += 5) ticks.push(t);
+    const gridHtml = ticks.map((t) => `<i class="grid" style="left:${x(t)}%"></i>`).join('');
+
+    $('#chart').innerHTML = rows.map((r) => {
+      const p = prevW[r.id];
+      const hasPrev = typeof p === 'number';
+      const a = hasPrev ? Math.min(p, r.w) : r.w, b = hasPrev ? Math.max(p, r.w) : r.w;
+      const d = hasPrev ? r.w - p : 0;
+      return `
+      <div class="row" role="listitem" aria-label="${r.name} ${pct(r.w)}，目標 ${r.target}%，區間 ${r.lo}–${r.hi}%">
+        <div class="row-label"><span class="name">${r.name}</span><span class="en">${r.en}</span><span class="mobile-val">${pct(r.w)}</span></div>
+        <div class="track">
+          ${gridHtml}
+          <div class="band" style="left:${x(r.lo)}%;width:${x(r.hi) - x(r.lo)}%"></div>
+          <div class="target" style="left:${x(r.target)}%"></div>
+          ${hasPrev ? `<div class="move" style="left:${x(a)}%;width:${x(b) - x(a)}%"></div>
+          <button class="dot prev" style="left:${x(p)}%" data-tip="<b>${r.name}</b> · ${fmtDate(snap.date)}<br>${pct(p)}"></button>` : ''}
+          <button class="dot now" style="left:${x(r.w)}%" data-tip="<b>${r.name}</b> · 目前<br>${pct(r.w)}（${usd(r.value)}）<br>目標 ${r.target}% · 區間 ${r.lo}–${r.hi}%"></button>
+        </div>
+        <div class="row-value"><b>${pct(r.w)}</b><small>${hasPrev ? `${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)} 點` : `目標 ${r.target}%`}</small></div>
+        ${statusChip(r.status)}
+      </div>`;
+    }).join('');
+    $('#ticks').innerHTML = ticks.map((t) => `<span style="left:${x(t)}%">${t}%</span>`).join('');
+
+    // todo
+    const flagged = rows.filter((r) => r.status !== 'ok');
+    flagged.sort((a, b) => (a.status.startsWith('near') ? 1 : 0) - (b.status.startsWith('near') ? 1 : 0));
+    $('#todo').innerHTML = flagged.length ? flagged.map((r) => {
+      const isOut = r.status === 'over' || r.status === 'under';
+      const edge = r.status === 'over' || r.status === 'near-hi' ? r.hi : r.lo;
+      const toEdge = ((edge - r.w) / 100) * total;
+      const toTarget = ((r.target - r.w) / 100) * total;
+      const verb = (n) => (n < 0 ? '賣出' : '買入');
+      const desc = {
+        over: `目前 ${pct(r.w)}，超過上限 ${r.hi}%`,
+        under: `目前 ${pct(r.w)}，低於下限 ${r.lo}%`,
+        'near-hi': `目前 ${pct(r.w)}，離上限 ${r.hi}% 只差 ${(r.hi - r.w).toFixed(1)} 點，先留意`,
+        'near-lo': `目前 ${pct(r.w)}，離下限 ${r.lo}% 只差 ${(r.w - r.lo).toFixed(1)} 點，先留意`,
+      }[r.status];
+      return `<div class="todo-item ${isOut ? 'crit' : 'warn'}">
+        <div class="ic">${isOut ? (r.status === 'over' ? ICON.up : ICON.down) : ICON.warn}</div>
+        <div><h3>${r.name} <span style="color:var(--muted);font-weight:500;font-size:13px">${r.en}</span></h3><p>${desc}</p></div>
+        <div class="todo-amts">
+          ${isOut ? `<div class="amt"><small>拉回${r.status === 'over' ? '上限' : '下限'}</small><b>${verb(toEdge)} ${usd(Math.abs(toEdge))}</b></div>` : ''}
+          <div class="amt"><small>拉回目標 ${r.target}%</small><b>${verb(toTarget)} ${usd(Math.abs(toTarget))}</b></div>
+        </div>
+      </div>`;
+    }).join('') : `<div class="todo-empty">${ICON.ok}<span>所有板塊都在區間內，這次一股都不用動。</span></div>`;
+
+    renderTables(total, rows);
+  }
+
+  function renderTables(total, rows) {
+    const opts = (sel) => state.sectors.map((s) => `<option value="${s.id}" ${s.id === sel ? 'selected' : ''}>${s.name}</option>`).join('');
+    $('#p-holdings').innerHTML = `
+      <table>
+        <thead><tr><th>代號</th><th>板塊</th><th class="num">股數 / 金額</th><th class="num">價格</th><th class="num">市值</th><th class="num">佔比</th><th></th></tr></thead>
+        <tbody>${state.holdings.map((h, i) => {
+          const v = (+h.shares || 0) * (+h.price || 0);
+          return `<tr>
+            <td><input class="sym" data-h="${i}" data-k="sym" value="${h.sym}"></td>
+            <td><select data-h="${i}" data-k="sector">${opts(h.sector)}</select></td>
+            <td><input class="num" data-h="${i}" data-k="shares" type="number" min="0" step="any" value="${h.shares}"></td>
+            <td><input class="num" data-h="${i}" data-k="price" type="number" min="0" step="any" value="${h.price}"></td>
+            <td class="num">${usd(v)}</td>
+            <td class="num">${total ? pct((v / total) * 100) : '—'}</td>
+            <td><button class="del" data-del-h="${i}" aria-label="刪除 ${h.sym}">${ICON.trash}</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+      <div class="table-foot">
+        <button class="btn" id="add-h">${ICON.plus}新增一筆持倉</button>
+        <span>共 ${state.holdings.length} 筆 · 總市值 <b>${usd(total)}</b></span>
+      </div>`;
+
+    const sumT = state.sectors.reduce((a, s) => a + (+s.target || 0), 0);
+    $('#p-sectors').innerHTML = `
+      <table>
+        <thead><tr><th>板塊</th><th>英文 / 備註</th><th class="num">下限 %</th><th class="num">目標 %</th><th class="num">上限 %</th><th class="num">目前</th><th></th></tr></thead>
+        <tbody>${state.sectors.map((s, i) => `<tr>
+          <td><input data-s="${i}" data-k="name" value="${s.name}"></td>
+          <td><input data-s="${i}" data-k="en" value="${s.en}"></td>
+          <td><input class="num" data-s="${i}" data-k="lo" type="number" step="0.5" value="${s.lo}"></td>
+          <td><input class="num" data-s="${i}" data-k="target" type="number" step="0.5" value="${s.target}"></td>
+          <td><input class="num" data-s="${i}" data-k="hi" type="number" step="0.5" value="${s.hi}"></td>
+          <td class="num">${pct(rows[i].w)}</td>
+          <td><button class="del" data-del-s="${i}" aria-label="刪除 ${s.name}">${ICON.trash}</button></td>
+        </tr>`).join('')}</tbody>
+      </table>
+      <div class="table-foot">
+        <button class="btn" id="add-s">${ICON.plus}新增板塊</button>
+        <span>目標合計 <b class="${Math.abs(sumT - 100) > 0.01 ? 'sum-bad' : ''}">${sumT}%</b>${Math.abs(sumT - 100) > 0.01 ? '（應該等於 100%）' : ' ✓'}</span>
+      </div>`;
+
+    $('#p-snaps').innerHTML = `
+      <table>
+        <thead><tr><th>日期</th><th class="num">總市值</th>${state.sectors.map((s) => `<th class="num">${s.name}</th>`).join('')}</tr></thead>
+        <tbody>${[...state.snapshots].reverse().map((sn) => `<tr>
+          <td>${fmtDate(sn.date)}</td><td class="num">${usd(sn.total)}</td>
+          ${state.sectors.map((s) => `<td class="num">${typeof sn.weights[s.id] === 'number' ? pct(sn.weights[s.id]) : '—'}</td>`).join('')}
+        </tr>`).join('')}</tbody>
+      </table>
+      <div class="table-foot"><span>快照是你按「存成今天的快照」時記下的權重，用來跟目前比較。</span></div>`;
+  }
+
+  // ---------- events ----------
+  document.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.dataset.h !== undefined) {
+      const h = state.holdings[+t.dataset.h];
+      h[t.dataset.k] = t.dataset.k === 'sym' ? t.value.toUpperCase() : t.value;
+    } else if (t.dataset.s !== undefined) {
+      const s = state.sectors[+t.dataset.s];
+      s[t.dataset.k] = ['lo', 'hi', 'target'].includes(t.dataset.k) ? +t.value : t.value;
+    } else return;
+    const pos = t.selectionStart, key = t.dataset.h !== undefined ? `[data-h="${t.dataset.h}"][data-k="${t.dataset.k}"]` : `[data-s="${t.dataset.s}"][data-k="${t.dataset.k}"]`;
+    render();
+    const el = document.querySelector(key);
+    if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) {} }
+  });
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'cmp') { state.cmpIndex = +e.target.value; render(); }
+    if (e.target.dataset.k === 'sector') { state.holdings[+e.target.dataset.h].sector = e.target.value; render(); }
+  });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.tab) {
+      document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', t === b));
+      ['holdings', 'sectors', 'snaps'].forEach((k) => { $('#p-' + k).hidden = k !== b.dataset.tab; });
+    }
+    if (b.dataset.delH !== undefined) { state.holdings.splice(+b.dataset.delH, 1); render(); }
+    if (b.dataset.delS !== undefined) { const id = state.sectors[+b.dataset.delS].id; state.sectors.splice(+b.dataset.delS, 1); state.holdings.forEach((h) => { if (h.sector === id) h.sector = state.sectors[0]?.id; }); render(); }
+    if (b.id === 'add-h') { state.holdings.push({ sym: '', sector: state.sectors[0].id, shares: 0, price: 0 }); render(); document.querySelector(`[data-h="${state.holdings.length - 1}"][data-k="sym"]`)?.focus(); }
+    if (b.id === 'add-s') { state.sectors.push({ id: 's' + Date.now(), name: '新板塊', en: '', target: 0, lo: 0, hi: 5 }); render(); }
+    if (b.id === 'btn-snap') {
+      const { total, rows } = compute();
+      const snap = { date: TODAY, total, weights: Object.fromEntries(rows.map((r) => [r.id, Math.round(r.w * 10) / 10])) };
+      const i = state.snapshots.findIndex((s) => s.date === TODAY);
+      if (i >= 0) state.snapshots[i] = snap; else state.snapshots.push(snap);
+      toast('已存下 ' + fmtDate(TODAY) + ' 的快照（設計稿不會真的保存）');
+      render();
+    }
+    if (b.id === 'btn-export' || b.id === 'btn-export-2') toast('會下載一個 JSON 備份檔（設計稿僅示意）');
+    if (b.id === 'btn-import') toast('會讓你選一個 JSON 備份檔還原（設計稿僅示意）');
+    if (b.id === 'btn-theme') {
+      const root = document.documentElement;
+      const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+      root.dataset.theme = dark ? 'light' : 'dark';
+    }
+  });
+
+  // tooltip
+  const tip = $('#tip');
+  document.addEventListener('pointerover', (e) => {
+    const d = e.target.closest('[data-tip]'); if (!d) return;
+    const r = d.getBoundingClientRect();
+    tip.innerHTML = d.dataset.tip; tip.style.left = r.left + r.width / 2 + 'px'; tip.style.top = r.top + 'px'; tip.style.opacity = 1;
+  });
+  document.addEventListener('pointerout', (e) => { if (e.target.closest('[data-tip]')) tip.style.opacity = 0; });
+
+  let tt;
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2400); }
+
+  render();
+})();
+</script>
+</body>
+</html>
