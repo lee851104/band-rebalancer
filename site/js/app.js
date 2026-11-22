@@ -333,51 +333,51 @@
   }
 
   // ---------- 板塊清單：每個板塊一行 ----------
-  function buildRow(r) {
-    var el = document.createElement('div');
-    el.className = 'row'; el.dataset.id = r.id; el.setAttribute('role', 'listitem');
-    el.innerHTML = '<button class="row-main" type="button" aria-expanded="false">' +
-      '<i class="sw"></i><span class="t"></span><span class="nums"></span><span class="act"></span>' + ICON.chev + '</button>' +
-      '<div class="detail"><div><div class="detail-in"><div class="planbox"></div><div class="hold"></div></div></div></div>';
-    return el;
-  }
-
+  // ---------- 色塊卡片：綠色＝剛好、紅色＝太多、藍色＝太少 ----------
   function renderRows(R) {
     var p = R.before, box = $('#rows');
     if (!p.rows.length) {
       box.innerHTML = '<div class="rows-empty">還沒有板塊。按下方「新增板塊」開始。</div>';
       return;
     }
-    var empty = box.querySelector('.rows-empty');
-    if (empty) empty.remove();
-    p.rows.forEach(function (r, idx) {
-      var el = box.querySelector('.row[data-id="' + r.id + '"]');
-      var fresh = !el;
-      if (fresh) el = buildRow(r);
-      // 只在位置不對時才移動，移動節點會讓裡面的輸入框失焦
-      if (box.children[idx] !== el) box.insertBefore(el, box.children[idx] || null);
-      var plan = R.plans[r.id], a = R.after.rows[idx];
-      if (editId === r.id) { if (fresh || el.dataset.hv !== holdingsVersion(r.id)) renderHoldings(el, r); }
-      else renderChips(el, r, plan);
+    if (!box.querySelector('.tiles')) {
+      box.innerHTML = '<div class="tiles" role="list"></div>' +
+        '<div class="tile-detail" hidden><div class="td-head"><i class="sw"></i><b class="td-name"></b><span class="td-st"></span><button class="td-close" type="button" data-close-detail aria-label="收起">×</button></div><div class="planbox"></div><div class="hold"></div></div>';
+    }
+    // 卡片（裡面沒有輸入框，每次直接重畫）
+    $('#rows .tiles').innerHTML = p.rows.map(function (r, idx) {
+      var a = R.after.rows[idx], plan = R.plans[r.id];
       var d = afterView ? a : r;
-      var out = isOut(d);
-      el.querySelector('.sw').style.background = color(r.i);
-      el.querySelector('.t').textContent = r.name || '未命名';
-      el.querySelector('.nums').innerHTML = (p.total > 0 ? '<b>' + pctTxt(d.weight, d) + '</b>' : '') + '<span>目標 ' + fmtP(r.target) + '</span>';
-      var act = el.querySelector('.act');
-      if (out) { act.className = 'act bad'; act.textContent = d.status === 'over' ? '太多' : '太少'; }
-      else if (r.status === 'empty' || r.status === 'invalid') { act.className = 'act muted'; act.textContent = '—'; }
-      else { act.className = 'act ok'; act.textContent = '✓'; act.setAttribute('aria-label', '剛好'); }
-      renderPlan(el, r, plan);
-      updateHoldingCells(el, r);
-      el.classList.toggle('open', openId === r.id);
-      el.classList.toggle('hl', focusId === r.id);
-      el.classList.toggle('is-out', out);
-      el.querySelector('.row-main').setAttribute('aria-expanded', String(openId === r.id));
-    });
-    Array.prototype.slice.call(box.querySelectorAll('.row')).forEach(function (el) {
-      if (!p.rows.some(function (r) { return r.id === el.dataset.id; })) el.remove();
-    });
+      var out = isOut(d), hasData = p.total > 0 && r.status !== 'empty';
+      var cls = !hasData || r.status === 'invalid' ? 'none' : out ? (d.status === 'over' ? 'bad' : 'low') : 'ok';
+      var st = !hasData ? '還沒有股票' : r.status === 'invalid' ? '請設定目標'
+        : out ? (d.status === 'over' ? '太多・要賣' : '太少・要買')
+        : afterView && plan ? '✓ 調整後剛好' : '✓ 剛好';
+      return '<button class="tile ' + cls + (openId === r.id ? ' on' : '') + (focusId === r.id ? ' hl' : '') + '" type="button" role="listitem" data-tile="' + esc(r.id) + '" aria-expanded="' + (openId === r.id) + '">' +
+        '<span class="nm"><i style="background:' + color(r.i) + '"></i>' + esc(r.name || '未命名') + '</span>' +
+        '<span class="big">' + (hasData ? pctTxt(d.weight, d) : '—') + '</span>' +
+        '<span class="st">' + st + '</span>' +
+        '<span class="tg">目標 ' + fmtP(r.target) + '</span></button>';
+    }).join('');
+
+    // 點開的板塊：下面顯示股票字塊（或編輯欄）
+    var det = $('#rows .tile-detail');
+    var idx = -1;
+    p.rows.forEach(function (r, k) { if (r.id === openId) idx = k; });
+    if (idx < 0) { det.hidden = true; det.dataset.id = ''; return; }
+    var r = p.rows[idx], plan = R.plans[r.id], d = afterView ? R.after.rows[idx] : r;
+    det.hidden = false;
+    if (det.dataset.id !== r.id) { det.dataset.id = r.id; det.dataset.hv = ''; }
+    det.querySelector('.sw').style.background = color(r.i);
+    det.querySelector('.td-name').textContent = r.name || '未命名';
+    var tdst = det.querySelector('.td-st');
+    var out = isOut(d);
+    tdst.className = 'td-st ' + (out ? (d.status === 'over' ? 'bad' : 'low') : 'ok');
+    tdst.textContent = p.total > 0 ? pctTxt(d.weight, d) + '・目標 ' + fmtP(r.target) : '目標 ' + fmtP(r.target);
+    if (editId === r.id) { if (det.dataset.hv !== holdingsVersion(r.id)) renderHoldings(det, r); }
+    else renderChips(det, r, plan);
+    renderPlan(det, r, plan);
+    updateHoldingCells(det, r);
   }
 
   // 只在需要買賣、但板塊裡還沒有股票時提示金額；其他情況的建議直接貼在股票標籤上
@@ -500,7 +500,7 @@
     if (editId && editId !== openId) editId = null;
     render();
     if (scroll) {
-      var el = document.querySelector('.row[data-id="' + id + '"]');
+      var el = document.querySelector('#rows .tile-detail');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     if (openId) ensureSymbols();
@@ -882,8 +882,9 @@
     var menu = $('#menu');
     if (!b || !b.closest('.menu-wrap')) menu.hidden = true;
     // 點列的名稱或空白處（不是軌道）展開／收合
-    var main = e.target.closest('.row-main');
-    if (main && !e.target.closest('.track') && performance.now() - dragEnded > 250) { toggle(main.closest('.row').dataset.id); return; }
+    var tile = e.target.closest('[data-tile]');
+    if (tile) { toggle(tile.dataset.tile); return; }
+    if (e.target.closest('[data-close-detail]')) { openId = null; editId = null; render(); return; }
     if (!b) return;
     if (b.id === 'menu-btn') { menu.hidden = !menu.hidden; b.setAttribute('aria-expanded', String(!menu.hidden)); return; }
     if (b.id === 'theme-btn') { data.prefs.theme = data.prefs.theme === 'light' ? 'dark' : 'light'; commit(); return; }
@@ -946,7 +947,7 @@
     editId = s.id; // 新板塊直接進入編輯，方便取名
     openId = s.id;
     commit();
-    var el = document.querySelector('.row[data-id="' + s.id + '"]');
+    var el = document.querySelector('#rows .tile-detail');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(function () {
       var inp = document.querySelector('[data-sector-name="' + s.id + '"]');
@@ -997,7 +998,7 @@
     var svg = $('#flow');
     svg.classList.toggle('dimmed', !!focusId);
     Array.prototype.slice.call(svg.querySelectorAll('.fx')).forEach(function (g) { g.classList.toggle('on', g.dataset.s === focusId || g.dataset.s === openId); });
-    Array.prototype.slice.call(document.querySelectorAll('.row')).forEach(function (el) { el.classList.toggle('hl', el.dataset.id === focusId); });
+    Array.prototype.slice.call(document.querySelectorAll('.tile')).forEach(function (el) { el.classList.toggle('hl', el.dataset.tile === focusId); });
   }
   $('#flow').addEventListener('pointerover', function (e) { var g = e.target.closest('.fx'); setFocus(g ? g.dataset.s : null); });
   $('#flow').addEventListener('pointerleave', function () { setFocus(null); });
@@ -1007,7 +1008,7 @@
     render();
     if (afterView) toast('這是模擬，實際請到券商下單');
   });
-  $('#rows').addEventListener('pointerover', function (e) { var r = e.target.closest('.row'); if (r && !dragging) setFocus(r.dataset.id); });
+  $('#rows').addEventListener('pointerover', function (e) { var t = e.target.closest('.tile'); if (!dragging) setFocus(t ? t.dataset.tile : null); });
   $('#rows').addEventListener('pointerleave', function () { if (!dragging) setFocus(null); });
 
   // 離開頁面前把尚未寫入的變更存起來
