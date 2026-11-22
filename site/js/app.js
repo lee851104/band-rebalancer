@@ -173,7 +173,7 @@
     $('#total-sub').textContent = '';
     var outs = R.before.rows.filter(isOut).length;
     var b = $('#after-btn');
-    b.textContent = afterView ? '回到現在' : outs ? '看調整後的樣子' : '不用調整';
+    b.textContent = afterView ? '回到現在' : outs ? '看調整後' : '不用調整';
     b.classList.toggle('on', afterView);
     b.disabled = !afterView && !outs;
     b.setAttribute('aria-pressed', String(afterView));
@@ -270,37 +270,38 @@
 
   // ---------- 結論：一句話 ----------
   function tradeSentence(p) {
-    if (!p.trades.length) return (p.side === 'sell' ? '賣出' : '買入') + '約 ' + usd(p.amount);
-    return (p.side === 'sell' ? '賣 ' : '買 ') + p.trades.map(function (t) { return esc(t.sym) + ' ' + t.shares.toLocaleString('en-US') + ' 股'; }).join('、');
+    if (!p.trades.length) return (p.side === 'sell' ? '賣約 ' : '買約 ') + usd(p.amount);
+    return (p.side === 'sell' ? '賣 ' : '買 ') + p.trades.map(function (t) { return esc(t.sym) + ' ' + t.shares.toLocaleString('en-US'); }).join(' · ') + ' 股';
   }
   function renderVerdict(R) {
     var v = $('#verdict'), p = R.before;
     if (!p.rows.length) {
       v.className = 'verdict ok';
-      v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先新增板塊</h2><p>按下方「新增板塊」開始。</p>';
+      v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先新增板塊</h2>';
       return;
     }
     if (p.total <= 0) {
       v.className = 'verdict ok';
-      v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先填你的股票</h2><p>點下面的板塊名稱，按「新增股票」，搜尋代號並填股數。</p>';
+      v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先填你的股票</h2><p>點下面的板塊 → 新增</p>';
       return;
     }
     var outs = p.rows.filter(isOut);
     if (afterView) {
       var still = R.after.rows.filter(isOut);
       v.className = 'verdict ' + (still.length ? 'bad' : 'ok');
-      v.innerHTML = '<h2><span class="ic">' + (still.length ? ICON.warn : ICON.ok) + '</span>' + (still.length ? '還有 ' + still.length + ' 個板塊要自己處理' : '照建議調整後，每個板塊都剛好') + '</h2>' +
-        '<p>' + (R.cash > 0 ? '賣出的 ' + usd(R.cash) + ' 先放著當現金。' : R.cash < 0 ? '需要另外準備 ' + usd(R.cash) + ' 來買。' : '') + '</p>';
+      v.innerHTML = '<h2><span class="ic">' + (still.length ? ICON.warn : ICON.ok) + '</span>' + (still.length ? '還有 ' + still.length + ' 個要處理' : '調整後都剛好') + '</h2>' +
+        '<p>' + (R.cash > 0 ? '多出現金 ' + usd(R.cash) : R.cash < 0 ? '要補 ' + usd(R.cash) : '') + '</p>';
       return;
     }
     if (outs.length) {
       v.className = 'verdict bad';
       v.innerHTML = '<h2><span class="ic">' + ICON.warn + '</span>' + outs.map(function (r) { return esc(r.name || '未命名') + (r.status === 'over' ? '太多了' : '太少了'); }).join('、') + '</h2>' +
-        '<p class="todo-line">' + outs.map(function (r) { return '<button class="link" type="button" data-open="' + esc(r.id) + '">' + esc(r.name || '未命名') + '</button>：' + tradeSentence(R.plans[r.id]); }).join('<br>') + '</p>' +
-        '<p>其他板塊都剛好，不用動。</p>';
+        '<p class="todo-line">' + outs.map(function (r) {
+          return (outs.length > 1 ? '<button class="link" type="button" data-open="' + esc(r.id) + '">' + esc(r.name || '未命名') + '</button>：' : '') + tradeSentence(R.plans[r.id]);
+        }).join('<br>') + '</p>';
     } else {
       v.className = 'verdict ok';
-      v.innerHTML = '<h2><span class="ic">' + ICON.ok + '</span>都剛好，這次不用動</h2><p>每個板塊都在目標 ±' + tol() + '% 以內。</p>';
+      v.innerHTML = '<h2><span class="ic">' + ICON.ok + '</span>都剛好，不用動</h2>';
     }
   }
 
@@ -355,22 +356,19 @@
       if (fresh) el = buildRow(r);
       // 只在位置不對時才移動，移動節點會讓裡面的輸入框失焦
       if (box.children[idx] !== el) box.insertBefore(el, box.children[idx] || null);
-      if (fresh || el.dataset.hv !== holdingsVersion(r.id)) renderHoldings(el, r);
       var plan = R.plans[r.id], a = R.after.rows[idx];
+      if (editId === r.id) { if (fresh || el.dataset.hv !== holdingsVersion(r.id)) renderHoldings(el, r); }
+      else renderChips(el, r, plan);
       var d = afterView ? a : r;
       var out = isOut(d);
       el.querySelector('.sw').style.background = color(r.i);
       el.querySelector('.t').textContent = r.name || '未命名';
-      el.querySelector('.nums').innerHTML = p.total > 0
-        ? '現在 <b>' + pctTxt(d.weight, d) + '</b><span>・目標 ' + fmtP(r.target) + '</span>'
-        : '<span>目標 ' + fmtP(r.target) + '</span>';
+      el.querySelector('.nums').innerHTML = (p.total > 0 ? '<b>' + pctTxt(d.weight, d) + '</b>' : '') + '<span>目標 ' + fmtP(r.target) + '</span>';
       var act = el.querySelector('.act');
-      if (afterView && plan && !out) { act.className = 'act ok'; act.textContent = '✓ 調整後剛好'; }
-      else if (out) { act.className = 'act bad'; act.textContent = d.status === 'over' ? '太多了' : '太少了'; }
-      else if (r.status === 'empty') { act.className = 'act muted'; act.textContent = '還沒有持股'; }
-      else if (r.status === 'invalid') { act.className = 'act muted'; act.textContent = '請設定目標'; }
-      else { act.className = 'act ok'; act.textContent = '✓ 剛好'; }
-      renderPlan(el, r, plan, a);
+      if (out) { act.className = 'act bad'; act.textContent = d.status === 'over' ? '太多' : '太少'; }
+      else if (r.status === 'empty' || r.status === 'invalid') { act.className = 'act muted'; act.textContent = '—'; }
+      else { act.className = 'act ok'; act.textContent = '✓'; act.setAttribute('aria-label', '剛好'); }
+      renderPlan(el, r, plan);
       updateHoldingCells(el, r);
       el.classList.toggle('open', openId === r.id);
       el.classList.toggle('hl', focusId === r.id);
@@ -382,25 +380,29 @@
     });
   }
 
-  // 要做什麼：每檔要買賣幾股
-  function renderPlan(el, r, plan, after) {
+  // 只在需要買賣、但板塊裡還沒有股票時提示金額；其他情況的建議直接貼在股票標籤上
+  function renderPlan(el, r, plan) {
     var box = el.querySelector('.planbox');
-    if (!plan) {
-      box.innerHTML = '<p class="calm-line">' + (r.status === 'empty' ? '先在下面新增股票，填好股數就會開始計算。'
-        : '現在 ' + pctTxt(r.weight, r) + '，目標 ' + fmtP(r.target) + '，差距在 ' + tol() + '% 以內，不用動。') + '</p>';
-      return;
-    }
-    var sell = plan.side === 'sell';
-    if (!plan.trades.length) {
-      box.innerHTML = '<div class="plan ' + (sell ? '' : 'buy') + '"><h4>' + (sell ? '建議賣出' : '建議買入') + '約 ' + usd(plan.amount) + '</h4><p>這個板塊還沒有股票，先在下面新增想' + (sell ? '賣' : '買') + '的股票。</p></div>';
-      return;
-    }
-    box.innerHTML = '<div class="plan ' + (afterView ? 'done' : sell ? '' : 'buy') + '">' +
-      '<h4>' + (afterView ? '已照建議調整' : sell ? '建議賣出' : '建議買入') + '</h4><ul>' +
-      plan.trades.map(function (t) {
-        return '<li><b>' + esc(t.sym) + '</b><span class="' + t.side + '">' + (sell ? '賣 ' : '買 ') + t.shares.toLocaleString('en-US') + ' 股</span><small>約 ' + usd(t.value) + '</small></li>';
-      }).join('') + '</ul>' +
-      '<p>' + (sell ? '賣完' : '買完') + '後從 ' + pctTxt(r.weight, r) + ' 變成約 ' + pctTxt(after.weight) + '，回到目標附近。</p></div>';
+    box.innerHTML = plan && !plan.trades.length && editId !== r.id
+      ? '<p class="calm-line">' + (plan.side === 'sell' ? '要賣約 ' : '要買約 ') + usd(plan.amount) + '</p>' : '';
+  }
+
+  // 股票標籤：代號、股數，要買賣的直接標在標籤上
+  function renderChips(el, r, plan) {
+    el.dataset.hv = 'view';
+    var list = data.holdings.filter(function (h) { return h.sectorId === r.id && h.sym; });
+    var tmap = {};
+    if (plan) plan.trades.forEach(function (t) { tmap[t.holdingId] = t; });
+    var chips = list.map(function (h) {
+      var t = tmap[h.id];
+      var shares = afterView && t && calc.isNum(h.shares) ? h.shares + (t.side === 'sell' ? -t.shares : t.shares) : h.shares;
+      var badge = t ? '<em class="' + t.side + (afterView ? ' done' : '') + '">' + (afterView ? '✓ ' : '') + (t.side === 'sell' ? '賣 ' : '買 ') + t.shares.toLocaleString('en-US') + '</em>' : '';
+      if (quotes.isCash(h.sym)) return '<span class="hchip"><b>現金</b><small>' + (calc.isNum(shares) ? usd(shares) : '—') + '</small>' + badge + '</span>';
+      return '<span class="hchip' + (t ? ' has-t' : '') + '" title="' + esc(symNames && symNames[h.sym] || h.sym) + '"><b>' + esc(h.sym) + '</b><small>' + sharesTxt(shares) + ' 股</small>' + badge + '</span>';
+    }).join('');
+    var anyHold = data.holdings.some(function (h) { return h.sectorId === r.id; });
+    el.querySelector('.hold').innerHTML = '<div class="hview">' + (chips || '<span class="tip">還沒有股票</span>') +
+      '<button class="edit-btn" type="button" data-edit-s="' + esc(r.id) + '" aria-label="編輯' + esc(r.name || '') + '">' + (anyHold ? ICON.pen + '編輯' : ICON.plus + '新增') + '</button></div>';
   }
 
   // 持股清單：結構改變時才重建；打字時只更新提示文字
@@ -442,7 +444,7 @@
       }).join('') || '<tr><td colspan="4" class="tip" style="padding:12px 6px">還沒有股票</td></tr>') +
       '</tbody></table>' +
       '<div class="hold-foot"><button class="add" type="button" data-add-h="' + esc(r.id) + '">' + ICON.plus + '新增股票</button>' +
-      '<span class="tip">現金：代號打 USD，股數填金額</span>' +
+      '<span class="tip">現金：代號打 USD</span>' +
       '<button class="text-btn" type="button" data-del-s="' + esc(r.id) + '">刪除這個板塊</button>' +
       '<button class="done-btn" type="button" data-done-s="' + esc(r.id) + '">完成</button></div>';
   }
@@ -920,7 +922,7 @@
         data.prefs.theme = theme;
         onboarding = false;
         commit();
-        toast('已載入範例資料，數字都是虛構的');
+        toast('範例資料，數字是虛構的');
         ensureSymbols();
         if (storage.getApiKey()) refreshAll(true);
         break;
@@ -1003,7 +1005,7 @@
   $('#after-btn').addEventListener('click', function () {
     afterView = !afterView;
     render();
-    if (afterView) toast('這是照建議交易後的樣子，實際交易請自行在券商操作');
+    if (afterView) toast('這是模擬，實際請到券商下單');
   });
   $('#rows').addEventListener('pointerover', function (e) { var r = e.target.closest('.row'); if (r && !dragging) setFocus(r.dataset.id); });
   $('#rows').addEventListener('pointerleave', function () { if (!dragging) setFocus(null); });
