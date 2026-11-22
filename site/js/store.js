@@ -35,7 +35,7 @@
       version: VERSION,
       sectors: [],
       holdings: [],
-      prefs: { theme: 'dark' },
+      prefs: { theme: 'dark', tol: 5 },
       meta: { lastBackupAt: null, lastQuoteAt: null, since: null },
     };
   }
@@ -118,7 +118,7 @@
         return { id: s.id, name: s.name, lo: s.lo, target: s.target, hi: s.hi };
       }),
       holdings: [],
-      prefs: { theme: prefs.theme === 'light' ? 'light' : 'dark' },
+      prefs: { theme: prefs.theme === 'light' ? 'light' : 'dark', tol: isFiniteNum(prefs.tol) && prefs.tol >= 1 && prefs.tol <= 20 ? prefs.tol : 5 },
       meta: {
         lastBackupAt: isIso(meta.lastBackupAt) ? meta.lastBackupAt : null,
         lastQuoteAt: isIso(meta.lastQuoteAt) ? meta.lastQuoteAt : null,

@@ -118,7 +118,8 @@
       el.innerHTML = ICON.warn + '<span class="msg">' + (last ? '已經 ' + days + ' 天沒有備份了。' : '還沒有備份過。') +
         '資料只存在這台裝置的瀏覽器，清除瀏覽器資料就會不見；iPhone 的 Safari 太久沒開啟也可能清掉網站資料，建議把網頁加入主畫面並定期匯出。</span>' + btn;
     }
-    $('#menu-meta').textContent = '持股數量只存在這台裝置；查報價時只送出股票代號・' +
+    Array.prototype.slice.call(document.querySelectorAll('[data-tol]')).forEach(function (x) { x.setAttribute('aria-pressed', String(+x.dataset.tol === tol())); });
+    $('#menu-meta').textContent = '股數只存在這台裝置；查價格時只送出股票代號・' +
       (last ? '上次備份 ' + (days === 0 ? '今天' : days + ' 天前') : '尚未備份');
   }
 
@@ -165,12 +166,12 @@
 
   function renderTotal(R) {
     var src = afterView ? R.after : R.before;
-    $('#total-label').textContent = afterView ? '調整後總市值' : '總市值';
+    $('#total-label').textContent = afterView ? '調整後總值' : '總值';
     countTo($('#total-v'), src.total);
-    $('#total-sub').textContent = src.rows.length + ' 個板塊・' + data.holdings.length + ' 檔持股';
+    $('#total-sub').textContent = '';
     var outs = R.before.rows.filter(isOut).length;
     var b = $('#after-btn');
-    b.textContent = afterView ? '回到目前' : outs ? '看調整後' : '不需要調整';
+    b.textContent = afterView ? '回到現在' : outs ? '看調整後的樣子' : '不用調整';
     b.classList.toggle('on', afterView);
     b.disabled = !afterView && !outs;
     b.setAttribute('aria-pressed', String(afterView));
@@ -215,7 +216,7 @@
     var tSum = rows.reduce(function (a, r) { return a + (calc.isNum(r.target) ? r.target : 0); }, 0);
     var bSum = rows.reduce(function (a, r) { return a + shown.w[r.id]; }, 0) + shown.cash;
     var g = '<text x="0" y="' + (FYT + FBAR / 2 + 5) + '" class="row-lbl">目標</text>' +
-      '<text x="0" y="' + (FYB + FBAR / 2 + 5) + '" class="row-lbl">' + (afterView ? '調整後' : '目前') + '</text>';
+      '<text x="0" y="' + (FYB + FBAR / 2 + 5) + '" class="row-lbl">' + (afterView ? '調整後' : '現在') + '</text>';
     if (tSum <= 0) { svg.innerHTML = g; return; }
     var at = 0, ab = 0, labels = '';
     rows.forEach(function (r) {
@@ -242,19 +243,17 @@
         (hasT ? '<rect x="' + (t0 + gap / 2) + '" y="' + FYT + '" width="' + (t1 - t0 - gap) + '" height="' + FBAR + '" rx="9" fill="' + color(r.i) + '"/>' : '') +
         (hasB ? '<rect x="' + (b0 + gap / 2) + '" y="' + FYB + '" width="' + (b1 - b0 - gap) + '" height="' + FBAR + '" rx="9" fill="' + color(r.i) + '"' + (out ? ' stroke="var(--critical)" stroke-width="3"' : fixed ? ' stroke="var(--good)" stroke-width="3"' : '') + '/>' : '') +
         (t1 - t0 > 46 ? '<text x="' + cxT + '" y="' + (FYT + 20) + '" text-anchor="middle" class="seg-name" style="fill:' + ink + '">' + esc(r.name || '未命名') + '</text><text x="' + cxT + '" y="' + (FYT + 36) + '" text-anchor="middle" class="seg-pct" style="fill:' + ink + '">' + fmtP(tv) + '</text>' : '') +
-        (b1 - b0 > 46 ? '<text x="' + cxB + '" y="' + (FYB + 20) + '" text-anchor="middle" class="seg-name" style="fill:' + ink + '">' + esc(r.name || '未命名') + '</text><text x="' + cxB + '" y="' + (FYB + 36) + '" text-anchor="middle" class="seg-pct" style="fill:' + ink + '">' + w.toFixed(1) + '%</text>' : '') +
+        (b1 - b0 > 46 ? '<text x="' + cxB + '" y="' + (FYB + 20) + '" text-anchor="middle" class="seg-name" style="fill:' + ink + '">' + esc(r.name || '未命名') + '</text><text x="' + cxB + '" y="' + (FYB + 36) + '" text-anchor="middle" class="seg-pct" style="fill:' + ink + '">' + pctTxt(w, r) + '</text>' : '') +
         '</g>';
       var lx = (cxT + cxB) / 2, dev = w - tv, sg = (dev > 0 ? '+' : dev < 0 ? '−' : '±') + Math.abs(dev).toFixed(1);
       var plan = R.plans[r.id];
       if (out && plan && !afterView) {
-        var txt = sg + ' 點・' + (plan.side === 'sell' ? '賣 ' : '買 ') + usd(plan.trades.length ? plan.value : plan.amount);
-        var wd = txt.length * 8 + 26;
+        var txt = (dev > 0 ? '多了 ' : '少了 ') + Math.round(Math.abs(dev)) + '%';
+        var wd = txt.length * 13 + 24;
         var lxc = Math.max(wd / 2 + 2, Math.min(vw - wd / 2 - 2, lx)); // 標籤不要超出畫布
         labels += '<g pointer-events="none" transform="translate(' + lxc + ',' + my + ')"><rect x="' + (-wd / 2) + '" y="-15" width="' + wd + '" height="30" rx="15" fill="var(--critical)"/><text text-anchor="middle" y="5" style="fill:#fff;font-weight:700;font-size:13px">' + txt + '</text></g>';
       } else if (fixed) {
-        labels += '<g pointer-events="none" transform="translate(' + lx + ',' + my + ')"><rect x="-50" y="-15" width="100" height="30" rx="15" fill="var(--good)"/><text text-anchor="middle" y="5" style="fill:#06240f;font-weight:700;font-size:13px">✓ ' + sg + ' 點</text></g>';
-      } else if (bSum > 0 && hasT) {
-        labels += '<text x="' + lx + '" y="' + (my + 4) + '" text-anchor="middle" class="dev" pointer-events="none">' + sg + '</text>';
+        labels += '<g pointer-events="none" transform="translate(' + lx + ',' + my + ')"><rect x="-34" y="-15" width="68" height="30" rx="15" fill="var(--good)"/><text text-anchor="middle" y="5" style="fill:#06240f;font-weight:700;font-size:13px">✓ 剛好</text></g>';
       }
     });
     if (shown.cash > 0.05 && bSum > 0) {
@@ -267,201 +266,142 @@
     svg.classList.toggle('dimmed', !!focusId);
   }
 
-  // ---------- 結論 ----------
+  // ---------- 結論：一句話 ----------
+  function tradeSentence(p) {
+    if (!p.trades.length) return (p.side === 'sell' ? '賣出' : '買入') + '約 ' + usd(p.amount);
+    return (p.side === 'sell' ? '賣 ' : '買 ') + p.trades.map(function (t) { return esc(t.sym) + ' ' + t.shares.toLocaleString('en-US') + ' 股'; }).join('、');
+  }
   function renderVerdict(R) {
     var v = $('#verdict'), p = R.before;
     if (!p.rows.length) {
       v.className = 'verdict ok';
-      v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先新增板塊</h2><p>按下方「新增板塊」，再拖曳設定目標與允許區間。</p>';
+      v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先新增板塊</h2><p>按下方「新增板塊」開始。</p>';
       return;
     }
     if (p.total <= 0) {
       v.className = 'verdict ok';
-      v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先在板塊裡新增持股</h2><p>點板塊名稱展開，按「新增持股」並搜尋代號，填入股數後就會開始計算。</p>';
+      v.innerHTML = '<h2><span class="ic">' + ICON.info + '</span>先填你的股票</h2><p>點下面的板塊名稱，按「新增股票」，搜尋代號並填股數。</p>';
       return;
     }
     var outs = p.rows.filter(isOut);
-    var bad = p.rows.filter(function (r) { return r.status === 'invalid'; });
     if (afterView) {
       var still = R.after.rows.filter(isOut);
       v.className = 'verdict ' + (still.length ? 'bad' : 'ok');
-      v.innerHTML = '<h2><span class="ic">' + (still.length ? ICON.warn : ICON.ok) + '</span>' + (still.length ? '調整後仍有 ' + still.length + ' 個板塊要手動處理' : '調整後，每個板塊都在範圍內') + '</h2>' +
-        '<p>' + (R.cash > 0 ? '賣出的 ' + usd(R.cash) + ' 先留作現金，總市值不變。' : R.cash < 0 ? '買入需要另外準備 ' + usd(R.cash) + '。' : '') + '下排是照建議交易後的比例，虛線圓點是原本的位置。</p>';
+      v.innerHTML = '<h2><span class="ic">' + (still.length ? ICON.warn : ICON.ok) + '</span>' + (still.length ? '還有 ' + still.length + ' 個板塊要自己處理' : '照建議調整後，每個板塊都剛好') + '</h2>' +
+        '<p>' + (R.cash > 0 ? '賣出的 ' + usd(R.cash) + ' 先放著當現金。' : R.cash < 0 ? '需要另外準備 ' + usd(R.cash) + ' 來買。' : '') + '</p>';
       return;
     }
     if (outs.length) {
       v.className = 'verdict bad';
       v.innerHTML = '<h2><span class="ic">' + ICON.warn + '</span>' + outs.map(function (r) { return esc(r.name || '未命名') + (r.status === 'over' ? '太多了' : '太少了'); }).join('、') + '</h2>' +
-        '<p>其他板塊都在範圍內，不用動。照下面的建議交易，就能回到範圍內：</p>' +
-        '<div class="todo-pills">' + outs.map(function (r) {
-          return '<button class="pill" type="button" data-open="' + esc(r.id) + '"><i class="sw" style="background:' + color(r.i) + '"></i>' + esc(r.name || '未命名') + '<b>' + planSummary(R.plans[r.id]) + '</b>' + ICON.chevR + '</button>';
-        }).join('') + '</div>';
+        '<p class="todo-line">' + outs.map(function (r) { return '<button class="link" type="button" data-open="' + esc(r.id) + '">' + esc(r.name || '未命名') + '</button>：' + tradeSentence(R.plans[r.id]); }).join('<br>') + '</p>' +
+        '<p>其他板塊都剛好，不用動。</p>';
     } else {
       v.className = 'verdict ok';
-      v.innerHTML = '<h2><span class="ic">' + ICON.ok + '</span>全部在區間內</h2>' +
-        '<p>每個板塊都在你設定的允許範圍內，這次一股都不用動。</p>' +
-        '<span class="calm">' + ICON.ok + (bad.length ? bad.length + ' 個板塊的區間設定有誤，請拖曳修正' : '下次檢查時再看看就好') + '</span>';
+      v.innerHTML = '<h2><span class="ic">' + ICON.ok + '</span>都剛好，這次不用動</h2><p>每個板塊都在目標 ±' + tol() + '% 以內。</p>';
     }
   }
 
-  function renderSum() {
-    var sum = calc.targetSum(data.sectors);
-    var el = $('#sum');
-    var ok = !data.sectors.length || Math.abs(sum - 100) < 0.001;
-    el.className = 'sum' + (ok ? '' : ' bad');
-    el.innerHTML = ok ? ICON.ok + '目標合計 100%' : ICON.warn + '目標合計 ' + fmtP(sum) + '<button type="button" data-action="fix-sum">補成 100%</button>';
-    el.hidden = !data.sectors.length;
+  // ---------- 白話的數字 ----------
+  function tol() { return data.prefs.tol || 5; }
+  // 比例顯示整數；剛好卡在邊界時多顯示一位小數，避免出現「25% 卻說太多了」
+  function pctTxt(w, r) {
+    var n = Math.round(w);
+    if (r && calc.isNum(r.hi) && ((n === r.hi && calc.r1(w) > r.hi) || (n === r.lo && calc.r1(w) < r.lo))) return calc.r1(w).toFixed(1) + '%';
+    return n + '%';
+  }
+  // 目標改了，可接受範圍跟著目標 ± 差距
+  function setTarget(s, v) {
+    s.target = Math.max(0, Math.min(100, v));
+    s.lo = Math.max(0, s.target - tol());
+    s.hi = Math.min(100, s.target + tol());
+  }
+  function setTol(n) {
+    data.prefs.tol = n;
+    data.sectors.forEach(function (s) { if (calc.isNum(s.target)) setTarget(s, s.target); });
   }
 
-  // ---------- 區間列 ----------
-  var EDGE_LABEL = { lo: '下限', target: '目標', hi: '上限' };
+  function renderSum() {
+    var el = $('#sum-line');
+    var sum = calc.targetSum(data.sectors);
+    var ok = !data.sectors.length || Math.abs(sum - 100) < 0.001;
+    el.hidden = ok;
+    if (!ok) el.innerHTML = ICON.warn + '<span>所有目標加起來是 ' + fmtP(sum) + '，應該是 100%。</span><button class="link" type="button" data-action="fix-sum">幫我調成 100%</button>';
+  }
 
+  // ---------- 板塊清單：每個板塊一行 ----------
   function buildRow(r) {
     var el = document.createElement('div');
     el.className = 'row'; el.dataset.id = r.id; el.setAttribute('role', 'listitem');
-    el.innerHTML = '<div class="row-main">' +
-      '<button class="name" type="button" aria-expanded="false">' + ICON.chev + '<i class="sw"></i><span class="t"></span><span class="wm"></span></button>' +
-      '<div class="track">' +
-      '<span class="band"></span><span class="target"></span><span class="gap"></span><span class="gap-label"></span><span class="dot ghost" hidden></span><span class="dot now"></span>' +
-      ['lo', 'target', 'hi'].map(function (k) {
-        return '<span class="h ' + (k === 'target' ? 'tgt' : 'edge') + '" data-edge="' + k + '" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100"><span class="lab"></span></span>';
-      }).join('') +
-      '</div><span class="w"></span><span class="act"></span></div>' +
-      '<div class="detail"><div><div class="detail-in"><div class="stats"></div><div class="planbox"></div><div class="hold"></div></div></div></div>';
+    el.innerHTML = '<button class="row-main" type="button" aria-expanded="false">' +
+      '<i class="sw"></i><span class="t"></span><span class="nums"></span><span class="act"></span>' + ICON.chev + '</button>' +
+      '<div class="detail"><div><div class="detail-in"><div class="planbox"></div><div class="hold"></div></div></div></div>';
     return el;
   }
 
   function renderRows(R) {
-    var p = R.before;
-    var box = $('#rows');
+    var p = R.before, box = $('#rows');
     if (!p.rows.length) {
       box.innerHTML = '<div class="rows-empty">還沒有板塊。按下方「新增板塊」開始。</div>';
       return;
     }
     var empty = box.querySelector('.rows-empty');
     if (empty) empty.remove();
-    if (!dragging || scaleMax === null) scaleMax = calc.axisMax(p.rows);
-    var max = scaleMax;
-    var x = function (v) { return (Math.max(0, Math.min(v, max)) / max) * 100; };
-    box.classList.toggle('dragging-live', !!dragging);
-
     p.rows.forEach(function (r, idx) {
       var el = box.querySelector('.row[data-id="' + r.id + '"]');
       var fresh = !el;
-      if (fresh) {
-        el = buildRow(r);
-        var startAt = calc.isNum(r.target) ? x(r.target) : 0;
-        el.querySelector('.dot.now').style.left = startAt + '%';
-        el.querySelector('.band').style.left = startAt + '%';
-        el.querySelector('.band').style.width = '0%';
-        el.querySelector('.target').style.left = startAt + '%';
-      }
-      // 依板塊順序排列；只在位置不對時才移動，移動節點會讓裡面的輸入框失焦
+      if (fresh) el = buildRow(r);
+      // 只在位置不對時才移動，移動節點會讓裡面的輸入框失焦
       if (box.children[idx] !== el) box.insertBefore(el, box.children[idx] || null);
       if (fresh || el.dataset.hv !== holdingsVersion(r.id)) renderHoldings(el, r);
-
-      var tr = el.querySelector('.track');
-      if (tr.dataset.max !== String(max)) {
-        Array.prototype.slice.call(tr.querySelectorAll('.tick')).forEach(function (t) { t.remove(); });
-        for (var t = 0; t <= max; t += 5) { var k = document.createElement('i'); k.className = 'tick'; k.style.left = x(t) + '%'; tr.insertBefore(k, tr.firstChild); }
-        tr.dataset.max = String(max);
-      }
-      var plan = R.plans[r.id];
-      var d = afterView ? R.after.rows[idx] : r; // 畫面上顯示的狀態
+      var plan = R.plans[r.id], a = R.after.rows[idx];
+      var d = afterView ? a : r;
+      var out = isOut(d);
       el.querySelector('.sw').style.background = color(r.i);
       el.querySelector('.t').textContent = r.name || '未命名';
-      el.querySelector('.wm').textContent = d.weight.toFixed(1) + '%';
-      el.querySelector('.w').textContent = d.weight.toFixed(1) + '%';
-      var dot = el.querySelector('.dot.now');
-      var ghost = el.querySelector('.dot.ghost');
-      dot.style.background = color(r.i);
-      var isOut = d.status === 'over' || d.status === 'under';
-      dot.classList.toggle('out', isOut);
-      ghost.hidden = !(afterView && plan);
-      var valid = r.status !== 'invalid';
-      el.querySelector('.band').style.visibility = valid ? '' : 'hidden';
-
-      var gapEl = el.querySelector('.gap'), gl = el.querySelector('.gap-label');
-      var hs = { lo: el.querySelector('[data-edge="lo"]'), target: el.querySelector('[data-edge="target"]'), hi: el.querySelector('[data-edge="hi"]') };
-      var apply = function () {
-        if (valid) {
-          el.querySelector('.band').style.left = x(r.lo) + '%';
-          el.querySelector('.band').style.width = (x(r.hi) - x(r.lo)) + '%';
-        }
-        el.querySelector('.target').style.left = x(calc.isNum(r.target) ? r.target : 0) + '%';
-        dot.style.left = x(d.weight) + '%';
-        ghost.style.left = x(r.weight) + '%';
-        Object.keys(hs).forEach(function (k) {
-          var v = calc.isNum(r[k]) ? r[k] : 0;
-          hs[k].style.left = x(v) + '%';
-          hs[k].querySelector('.lab').textContent = EDGE_LABEL[k] + ' ' + fmtP(v);
-          hs[k].setAttribute('aria-valuenow', v);
-          hs[k].setAttribute('aria-valuetext', fmtP(v));
-          hs[k].setAttribute('aria-label', (r.name || '未命名') + ' ' + EDGE_LABEL[k]);
-        });
-        if (isOut) {
-          var a = Math.min(d.edge, d.weight), b = Math.max(d.edge, d.weight);
-          gapEl.style.left = x(a) + '%'; gapEl.style.width = (x(b) - x(a)) + '%';
-          gl.style.left = x((a + b) / 2) + '%';
-          gl.textContent = (d.status === 'over' ? '+' : '−') + Math.abs(calc.r1(d.weight - d.edge)).toFixed(1) + ' 點';
-        }
-        gapEl.classList.toggle('on', isOut); gl.classList.toggle('on', isOut);
-      };
-      if (fresh && first) requestAnimationFrame(function () { requestAnimationFrame(apply); }); else apply();
-
+      el.querySelector('.nums').innerHTML = p.total > 0
+        ? '現在 <b>' + pctTxt(d.weight, d) + '</b><span>・目標 ' + fmtP(r.target) + '</span>'
+        : '<span>目標 ' + fmtP(r.target) + '</span>';
       var act = el.querySelector('.act');
-      if (afterView && plan && !isOut) act.innerHTML = '<span class="chip ok">' + ICON.ok + '已調整</span><small>原本 ' + r.weight.toFixed(1) + '%</small>';
-      else if (isOut && plan && !afterView) act.innerHTML = '<span class="chip bad">' + ICON.warn + (plan.side === 'sell' ? '賣出 ' : '買入 ') + usd(plan.trades.length ? plan.value : plan.amount) + '</span><small>' + (r.status === 'over' ? '超出上限 ' : '低於下限 ') + fmtP(r.edge) + '</small>';
-      else if (isOut) act.innerHTML = '<span class="chip bad">' + ICON.warn + '仍超出</span><small>需要手動處理</small>';
-      else if (r.status === 'invalid') act.innerHTML = '<span class="chip neutral">' + ICON.warn + '區間設定有誤</span><small>拖曳把手修正</small>';
-      else if (r.status === 'empty') act.innerHTML = '<span class="chip neutral">尚無持股</span>';
-      else act.innerHTML = '<span class="chip ok">' + ICON.ok + '區間內</span>';
-
-      renderStats(el, r, p.total);
-      renderPlan(el, r, plan, R.after.rows[idx]);
+      if (afterView && plan && !out) { act.className = 'act ok'; act.textContent = '✓ 調整後剛好'; }
+      else if (out) { act.className = 'act bad'; act.textContent = d.status === 'over' ? '太多了' : '太少了'; }
+      else if (r.status === 'empty') { act.className = 'act muted'; act.textContent = '還沒有持股'; }
+      else if (r.status === 'invalid') { act.className = 'act muted'; act.textContent = '請設定目標'; }
+      else { act.className = 'act ok'; act.textContent = '✓ 剛好'; }
+      renderPlan(el, r, plan, a);
       updateHoldingCells(el, r);
       el.classList.toggle('open', openId === r.id);
       el.classList.toggle('hl', focusId === r.id);
-      el.querySelector('.name').setAttribute('aria-expanded', String(openId === r.id));
+      el.classList.toggle('is-out', out);
+      el.querySelector('.row-main').setAttribute('aria-expanded', String(openId === r.id));
     });
     Array.prototype.slice.call(box.querySelectorAll('.row')).forEach(function (el) {
       if (!p.rows.some(function (r) { return r.id === el.dataset.id; })) el.remove();
     });
   }
 
-  function renderStats(el, r, total) {
-    var isOut = r.status === 'over' || r.status === 'under';
-    var valid = r.status !== 'invalid';
-    var room = total > 0 && valid ? '離上限還有 ' + Math.max(0, r.hi - r.weight).toFixed(1) + ' 點（約 ' + usd(((r.hi - r.weight) / 100) * total) + '）' : '';
-    el.querySelector('.stats').innerHTML =
-      '<div class="stat"><small>目前</small><b>' + r.weight.toFixed(1) + '%</b><span>' + usd(r.value) + '・' + r.count + ' 檔</span></div>' +
-      '<div class="stat"><small>目標 ' + fmtP(r.target) + '</small><b>' + usd(((r.target || 0) / 100) * total) + '</b><span>' +
-      (total <= 0 ? '—' : Math.round(r.toTarget) === 0 ? '已在目標' : verb(r.toTarget) + ' ' + usd(r.toTarget) + ' 可回到目標') + '</span></div>' +
-      '<div class="stat ' + (isOut ? 'do' : valid ? 'fine' : '') + '"><small>允許區間 ' + (valid ? fmtP(r.lo) + '–' + fmtP(r.hi) : '設定有誤') + '</small><b>' +
-      (valid ? usd((r.lo / 100) * total) + '–' + usd((r.hi / 100) * total).slice(1) : '—') + '</b><span>' +
-      (isOut ? verb(r.toEdge) + ' ' + usd(r.toEdge) + ' 回到區間' : room) + '</span></div>';
-  }
-
-  // 建議交易：超出區間時，列出每檔要買賣幾股（賣回上限或買回下限）
+  // 要做什麼：每檔要買賣幾股
   function renderPlan(el, r, plan, after) {
     var box = el.querySelector('.planbox');
-    if (!plan) { box.innerHTML = ''; return; }
+    if (!plan) {
+      box.innerHTML = '<p class="calm-line">' + (r.status === 'empty' ? '先在下面新增股票，填好股數就會開始計算。'
+        : '現在 ' + pctTxt(r.weight, r) + '，目標 ' + fmtP(r.target) + '，差距在 ' + tol() + '% 以內，不用動。') + '</p>';
+      return;
+    }
     var sell = plan.side === 'sell';
-    var goalTxt = (sell ? '賣回上限 ' : '買回下限 ') + fmtP(plan.edge);
     if (!plan.trades.length) {
-      box.innerHTML = '<div class="plan ' + (sell ? '' : 'buy') + '"><h4>建議交易<span>' + goalTxt + '</span></h4><p>這個板塊還沒有持股，' + (sell ? '' : '需要買入約 ' + usd(plan.amount) + '，') + '請先新增想' + (sell ? '賣' : '買') + '的標的。</p></div>';
+      box.innerHTML = '<div class="plan ' + (sell ? '' : 'buy') + '"><h4>' + (sell ? '建議賣出' : '建議買入') + '約 ' + usd(plan.amount) + '</h4><p>這個板塊還沒有股票，先在下面新增想' + (sell ? '賣' : '買') + '的股票。</p></div>';
       return;
     }
     box.innerHTML = '<div class="plan ' + (afterView ? 'done' : sell ? '' : 'buy') + '">' +
-      '<h4>' + (afterView ? '已模擬交易' : '建議交易') + '<span>' + goalTxt + '・共 ' + usd(plan.value) + '</span></h4>' +
-      '<ul>' + plan.trades.map(function (t) {
-        return '<li><b>' + esc(t.sym) + '</b><span class="' + t.side + '">' + (t.side === 'sell' ? '賣 ' : '買 ') + t.shares.toLocaleString('en-US') + ' 股</span>' +
-          '<small>約 ' + usd(t.value) + '・' + t.held.toLocaleString('en-US') + ' → ' + (t.held + (t.side === 'sell' ? -t.shares : t.shares)).toLocaleString('en-US') + ' 股</small></li>';
+      '<h4>' + (afterView ? '已照建議調整' : sell ? '建議賣出' : '建議買入') + '</h4><ul>' +
+      plan.trades.map(function (t) {
+        return '<li><b>' + esc(t.sym) + '</b><span class="' + t.side + '">' + (sell ? '賣 ' : '買 ') + t.shares.toLocaleString('en-US') + ' 股</span><small>約 ' + usd(t.value) + '</small></li>';
       }).join('') + '</ul>' +
-      '<p>' + r.weight.toFixed(1) + '% → 約 ' + after.weight.toFixed(1) + '%。股數依各檔目前比例分配並無條件進位，確保交易後回到範圍內。</p></div>';
+      '<p>' + (sell ? '賣完' : '買完') + '後從 ' + pctTxt(r.weight, r) + ' 變成約 ' + pctTxt(after.weight) + '，回到目標附近。</p></div>';
   }
 
-  // 持股明細：結構改變時才重建；打字時只更新計算欄位
+  // 持股清單：結構改變時才重建；打字時只更新提示文字
   function holdingsVersion(sectorId) {
     return data.holdings.filter(function (h) { return h.sectorId === sectorId; }).map(function (h) { return h.id; }).join(',');
   }
@@ -470,21 +410,22 @@
     var list = data.holdings.filter(function (h) { return h.sectorId === r.id; });
     el.dataset.hv = holdingsVersion(r.id);
     el.querySelector('.hold').innerHTML =
-      '<div class="hold-head"><b>持股明細</b><input data-sector-name="' + esc(r.id) + '" value="' + esc(r.name) + '" aria-label="板塊名稱" title="板塊名稱" placeholder="板塊名稱"></div>' +
-      '<table><thead><tr><th>代號</th><th class="num">股數</th><th class="num">最新價格</th><th class="num">市值</th><th class="num">佔板塊</th><th><span class="sr-only">操作</span></th></tr></thead><tbody>' +
+      '<div class="set-row">' +
+      '<label>名稱<input data-sector-name="' + esc(r.id) + '" value="' + esc(r.name) + '" placeholder="板塊名稱"></label>' +
+      '<label>目標<input class="num tgt-in" type="number" inputmode="decimal" min="0" max="100" step="1" data-sector-target="' + esc(r.id) + '" value="' + (calc.isNum(r.target) ? r.target : '') + '">%</label>' +
+      '</div>' +
+      '<table><thead><tr><th>股票</th><th class="num">股數</th><th class="num">價格</th><th><span class="sr-only">刪除</span></th></tr></thead><tbody>' +
       (list.map(function (h) {
         var a = 'data-hid="' + esc(h.id) + '"';
         return '<tr ' + a + '>' +
-          '<td class="symcell"><input class="sym" ' + a + ' data-k="sym" value="' + esc(h.sym) + '" placeholder="輸入代號或公司名" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="combo" aria-label="代號"><small class="cname" data-cell="cn"></small></td>' +
+          '<td class="symcell"><input class="sym" ' + a + ' data-k="sym" value="' + esc(h.sym) + '" placeholder="輸入代號或公司名" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="combo" aria-label="股票代號"><small class="cname" data-cell="cn"></small></td>' +
           '<td><input class="num" type="number" inputmode="decimal" min="0" step="any" ' + a + ' data-k="shares" value="' + (h.shares == null ? '' : h.shares) + '" aria-label="股數"></td>' +
           '<td><input class="num" type="number" inputmode="decimal" min="0" step="any" ' + a + ' data-k="price" value="' + (h.price == null ? '' : h.price) + '" aria-label="價格"><small class="pmeta" data-cell="pm"></small></td>' +
-          '<td class="num" data-cell="v"></td>' +
-          '<td class="num"><span class="share"><i style="background:' + color(r.i) + '"></i><span data-cell="p"></span></span></td>' +
-          '<td><button class="del" type="button" data-del-h="' + esc(h.id) + '" aria-label="刪除 ' + esc(h.sym || '這筆持股') + '" title="刪除">' + ICON.trash + '</button></td></tr>';
-      }).join('') || '<tr><td colspan="6" class="tip" style="padding:12px 6px">這個板塊還沒有持股</td></tr>') +
+          '<td><button class="del" type="button" data-del-h="' + esc(h.id) + '" aria-label="刪除 ' + esc(h.sym || '這筆') + '" title="刪除">' + ICON.trash + '</button></td></tr>';
+      }).join('') || '<tr><td colspan="4" class="tip" style="padding:12px 6px">還沒有股票</td></tr>') +
       '</tbody></table>' +
-      '<div class="hold-foot"><button class="add" type="button" data-add-h="' + esc(r.id) + '">' + ICON.plus + '新增持股</button>' +
-      '<span class="tip">現金：代號填 USD，股數填金額、價格填 1</span>' +
+      '<div class="hold-foot"><button class="add" type="button" data-add-h="' + esc(r.id) + '">' + ICON.plus + '新增股票</button>' +
+      '<span class="tip">現金：代號打 USD，股數填金額</span>' +
       '<button class="text-btn" type="button" data-del-s="' + esc(r.id) + '">刪除這個板塊</button></div>';
   }
 
@@ -492,10 +433,6 @@
     Array.prototype.slice.call(el.querySelectorAll('tr[data-hid]')).forEach(function (tr) {
       var h = holdingById(tr.dataset.hid);
       if (!h) return;
-      var v = calc.holdingValue(h), pct = r.value > 0 ? (v / r.value) * 100 : 0;
-      tr.querySelector('[data-cell="v"]').textContent = usd(v);
-      tr.querySelector('[data-cell="p"]').textContent = pct.toFixed(0) + '%';
-      tr.querySelector('.share i').style.width = Math.max(2, pct * 0.5) + 'px';
       var errs = untouched[h.id] ? {} : calc.holdingErrors(h);
       ['shares', 'price'].forEach(function (k) {
         var inp = tr.querySelector('input[data-k="' + k + '"]');
@@ -505,13 +442,13 @@
       var cn = tr.querySelector('[data-cell="cn"]');
       if (quotes.isCash(h.sym)) cn.textContent = '現金（美元）';
       else if (!h.sym) cn.textContent = '';
-      else if (symNames) cn.textContent = symNames[h.sym] || '清單中找不到，價格請手動填';
+      else if (symNames) cn.textContent = symNames[h.sym] || '清單中找不到，價格請自己填';
       else cn.textContent = '';
       var pm = tr.querySelector('[data-cell="pm"]');
       if (pm.dataset.loading) return;
       var err = quoteErr[h.id];
       pm.className = 'pmeta' + (h.quoteAt && !err ? ' live' : err ? ' err' : '');
-      pm.textContent = quotes.isCash(h.sym) ? '固定 1' : err ? quotes.MESSAGES[err] : h.quoteAt ? '即時・' + hhmm(h.quoteAt) : h.sym ? '手動填寫' : '';
+      pm.textContent = quotes.isCash(h.sym) ? '' : err ? quotes.MESSAGES[err] : h.quoteAt ? '最新・' + hhmm(h.quoteAt) : '';
     });
   }
 
@@ -903,6 +840,10 @@
       h[t.dataset.k] = parseNum(t.value);
       if (t.dataset.k === 'price') { h.quoteAt = null; delete quoteErr[h.id]; }
       commit();
+    } else if (t.dataset && t.dataset.sectorTarget) {
+      var st = sectorById(t.dataset.sectorTarget);
+      var v = parseNum(t.value);
+      if (st && v !== null) { setTarget(st, v); commit(); }
     } else if (t.dataset && t.dataset.sectorName) {
       var s = sectorById(t.dataset.sectorName);
       if (s) { s.name = t.value; commit(); }
@@ -936,7 +877,17 @@
       case 'export': menu.hidden = true; doExport(); break;
       case 'import': menu.hidden = true; $('#file-import').click(); break;
       case 'key': menu.hidden = true; openKeyDialog(); break;
-      case 'fix-sum': ed.normalizeTargets(data.sectors); commit(); break;
+      case 'fix-sum':
+        ed.normalizeTargets(data.sectors);
+        data.sectors.forEach(function (x) { setTarget(x, x.target); });
+        commit();
+        break;
+      case 'tol':
+        setTol(+b.dataset.tol);
+        menu.hidden = true;
+        commit();
+        toast('差距超過 ' + b.dataset.tol + '% 才建議調整');
+        break;
       case 'sample': {
         var theme = data.prefs.theme;
         data = store.sampleData();
@@ -963,6 +914,7 @@
 
   function addSector() {
     var s = ed.addSector(data.sectors, store.uid('s'), '新板塊');
+    setTarget(s, s.target);
     openId = s.id;
     commit();
     var el = document.querySelector('.row[data-id="' + s.id + '"]');

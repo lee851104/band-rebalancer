@@ -35,7 +35,7 @@
     <h1>區間再平衡</h1>
     <button class="quote-btn" id="refresh-btn" type="button" title="查詢所有持股的最新價格">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4.2L4 8.5M4 4v4.5h4.5M4 13a8 8 0 0 0 14.8 4.2l1.2-1.7M20 20v-4.5h-4.5"/></svg>
-      <span class="txt">更新報價</span><span class="at" id="quote-at"></span>
+      <span class="txt">更新價格</span><span class="at" id="quote-at"></span>
     </button>
     <button class="icon-btn theme-btn" id="theme-btn" type="button" aria-label="切換深淺色" title="切換深淺色">
       <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
@@ -48,7 +48,8 @@
       <div class="menu" id="menu" role="menu" hidden>
         <button type="button" role="menuitem" data-action="export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>匯出備份</button>
         <button type="button" role="menuitem" data-action="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>從備份匯入</button>
-        <button type="button" role="menuitem" data-action="key"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3M17 6l3 3M15 8l2 2"/></svg>報價設定（Finnhub 金鑰）</button>
+        <div class="tol-pick" role="group" aria-label="差距多少才調整"><span>差距超過多少才調整</span><div><button type="button" data-action="tol" data-tol="3">3%</button><button type="button" data-action="tol" data-tol="5">5%</button><button type="button" data-action="tol" data-tol="8">8%</button></div></div>
+        <button type="button" role="menuitem" data-action="key"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3M17 6l3 3M15 8l2 2"/></svg>自動抓價格（Finnhub 金鑰）</button>
         <div class="meta" id="menu-meta"></div>
       </div>
     </div>
@@ -71,28 +72,21 @@
         <svg id="flow" viewBox="0 0 880 300" role="img" aria-label="目標配置與目前配置的流向圖"></svg>
       </div>
       <div class="flow-legend" aria-hidden="true">
-        <span><i style="background:var(--ink-2);opacity:.35"></i>彩帶：同一個板塊從目標（上）到目前（下）</span>
-        <span><i style="background:var(--critical)"></i>紅色：超出區間，需要調整</span>
-      </div>
-    </div>
-
-    <div class="toolbar">
-      <div class="hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11.5v-1.5a1.5 1.5 0 0 1 3 0V12M14 11a1.5 1.5 0 0 1 3 0v1.5M17 12.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2c-2.2 0-3.5-.7-4.7-2l-3.2-3.5a1.5 1.5 0 0 1 2.2-2.1L8 16"/></svg>拖曳藍框兩端改區間、拖曳黑線改目標；點板塊名稱看持股</div>
-      <div class="tools">
-        <span class="sum" id="sum"></span>
-        <span class="presets" role="group" aria-label="區間快速套用"><span>區間</span><button type="button" data-preset="pt3">±3 點</button><button type="button" data-preset="pt5">±5 點</button><button type="button" data-preset="rel25">±25%</button></span>
+        <span>上排是目標，下排是現在</span>
+        <span><i style="background:var(--critical)"></i>紅色：差太多，需要調整</span>
       </div>
     </div>
 
     <div class="rows" id="rows" role="list" aria-label="各板塊"></div>
 
+    <div class="sum-line" id="sum-line" role="status" hidden></div>
     <div class="foot-bar">
       <button class="add" id="add-s" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增板塊</button>
-      <div class="legend" aria-hidden="true"><span><i class="lg-band"></i>允許區間</span><span><i class="lg-target"></i>目標</span><span><i class="lg-dot"></i>目前權重</span><span><i class="lg-gap"></i>超出的距離</span></div>
+
     </div>
   </section>
 
-  <p class="tip" style="text-align:center;margin-top:16px">金額以「總市值不變、買賣的錢進出現金」估算，僅供參考，不是投資建議。</p>
+  <p class="tip" style="text-align:center;margin-top:16px">建議股數依各檔現在的比例分配，賣出的錢先當現金。僅供參考，不是投資建議。</p>
 </div>
 
 <input type="file" id="file-import" accept=".json,application/json" hidden>

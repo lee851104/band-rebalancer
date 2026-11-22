@@ -34,6 +34,15 @@ test('預設類別：火箭、光、軟體、電動車、醫療、半導體，�
   for (const s of sample.sectors) assert.ok(sample.holdings.some((h) => h.sectorId === s.id), s.name);
 });
 
+test('可接受的差距：預設 5%，保留合理的設定，不合理的值改回 5%', () => {
+  assert.equal(store.emptyData().prefs.tol, 5);
+  const ok = store.validateData({ version: 2, sectors: [], holdings: [], prefs: { tol: 3 } });
+  assert.equal(ok.data.prefs.tol, 3);
+  for (const bad of [0, 50, 'x', null]) {
+    assert.equal(store.validateData({ version: 2, sectors: [], holdings: [], prefs: { tol: bad } }).data.prefs.tol, 5, String(bad));
+  }
+});
+
 test('空資料預設深色、能通過驗證', () => {
   const d = store.emptyData();
   assert.equal(d.prefs.theme, 'dark');
